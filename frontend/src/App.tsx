@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
+import type { ElementType, FormEvent, ReactNode } from 'react'
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import {
-  Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarDays,
+  Activity, ArrowRight, ArrowUpRight, Bell, CalendarDays,
   Check, ChevronDown, CircleHelp, ClipboardList, Download, FileHeart, HeartPulse,
-  LayoutDashboard, Menu, MoreHorizontal, Plus, Search, Settings, ShieldCheck,
-  SlidersHorizontal, Sparkles, Stethoscope, TrendingUp, Users, X, Zap,
+  LayoutDashboard, Menu, MoreHorizontal, Search, Settings, ShieldCheck,
+  SlidersHorizontal, Sparkles, Stethoscope, X, Zap,
 } from 'lucide-react'
 import {
   Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -88,11 +89,11 @@ function Topbar() {
   </header>
 }
 
-function SectionTitle({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: React.ReactNode }) {
+function SectionTitle({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: ReactNode }) {
   return <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div>{eyebrow && <p className="mb-1.5 text-[10px] font-extrabold uppercase tracking-[.18em] text-blue-600">{eyebrow}</p>}<h2 className="text-2xl font-extrabold tracking-tight text-blue-950">{title}</h2>{description && <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-500">{description}</p>}</div>{action}</div>
 }
 
-function StatCard({ label, value, detail, icon: Icon, trend, accent = 'blue' }: { label: string; value: string; detail: string; icon: React.ElementType; trend?: string; accent?: 'blue' | 'mint' | 'violet' }) {
+function StatCard({ label, value, detail, icon: Icon, trend, accent = 'blue' }: { label: string; value: string; detail: string; icon: ElementType; trend?: string; accent?: 'blue' | 'mint' | 'violet' }) {
   const tones = { blue: 'bg-blue-50 text-blue-600', mint: 'bg-emerald-50 text-emerald-600', violet: 'bg-violet-50 text-violet-600' }
   return <div className="rounded-2xl border border-blue-100/80 bg-white p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-md">
     <div className="flex items-start justify-between"><div><p className="text-sm font-medium text-slate-500">{label}</p><p className="mt-2 text-3xl font-extrabold tracking-tight text-blue-950">{value}</p></div><div className={cn('grid h-11 w-11 place-items-center rounded-xl', tones[accent])}><Icon size={20} /></div></div>
@@ -151,7 +152,7 @@ function PredictionPage({ onAdd }: { onAdd: (p: Patient) => void }) {
     { key: 'pedigree', label: 'Family history score', unit: 'score', min: 0, max: 3, step: '0.01', hint: 'Diabetes pedigree function' },
     { key: 'age', label: 'Age', unit: 'years', min: 18, max: 120, hint: 'Age in years' },
   ]
-  function submit(e: React.FormEvent) {
+  function submit(e: FormEvent) {
     e.preventDefault()
     const invalid = fields.find(f => values[f.key].trim() === '' || !Number.isFinite(Number(values[f.key])) || Number(values[f.key]) < f.min || Number(values[f.key]) > f.max)
     if (invalid) { setError('Please enter a valid ' + invalid.label.toLowerCase() + ' between ' + invalid.min + ' and ' + invalid.max + '.'); setResult(null); return }
