@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "frontend: dev server",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\.vscode\\start-dev-server.ps1"
+      ],
+      "detail": "Start Vite, wait until http://127.0.0.1:5173 is ready, then launch the debugger",
+      "problemMatcher": []
+    }
+  ]
+}

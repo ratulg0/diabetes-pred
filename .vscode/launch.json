@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "msedge",
+      "request": "launch",
+      "name": "Debug frontend in Edge",
+      "url": "http://127.0.0.1:5173",
+      "webRoot": "${workspaceFolder}/frontend",
+      "sourceMaps": true,
+      "preLaunchTask": "frontend: dev server",
+      "presentation": {
+        "group": "debug"
+      }
+    },
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Debug frontend in Chrome",
+      "url": "http://127.0.0.1:5173",
+      "webRoot": "${workspaceFolder}/frontend",
+      "sourceMaps": true,
+      "preLaunchTask": "frontend: dev server"
+    }
+  ]
+}
