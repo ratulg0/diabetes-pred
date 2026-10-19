@@ -70,13 +70,13 @@ const percent = (value: number | undefined | null) =>
   typeof value === "number" && Number.isFinite(value)
     ? `${(value * 100).toFixed(1)}%`
     : "Not available";
-const modelName = (name: string) =>
-  ({
-    logistic_regression: "Logistic Regression",
-    random_forest: "Random Forest",
-    xgboost: "XGBoost",
-    hist_gradient_boosting: "HistGradientBoosting",
-  })[name] ?? name;
+const MODEL_NAMES: Record<string, string> = {
+  logistic_regression: "Logistic Regression",
+  random_forest: "Random Forest",
+  xgboost: "XGBoost",
+  hist_gradient_boosting: "HistGradientBoosting",
+};
+const modelName = (name: string) => MODEL_NAMES[name] ?? name;
 const displayGlucose = (value: number, unit: Preferences["glucose_unit"]) =>
   unit === "mmol/L"
     ? `${(value / 18.0182).toFixed(1)} mmol/L`
