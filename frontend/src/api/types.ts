@@ -108,6 +108,12 @@ export type DashboardSummary = {
   recent_assessments: AssessmentRecord[];
 };
 
+export type DatasetDistribution = {
+  column: string;
+  row_count: number;
+  counts: Array<{ label: string; count: number }>;
+};
+
 export type Preferences = {
   scope: string;
   glucose_unit: "mg/dL" | "mmol/L";
