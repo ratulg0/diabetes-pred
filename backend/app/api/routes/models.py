@@ -70,7 +70,7 @@ async def retrain_all_models(
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
     except Exception as error:
-        logger.exception("ensemble_retraining_failed")
+        logger.exception("clinical_model_retraining_failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="The models could not be retrained. Check the backend logs for details.",
