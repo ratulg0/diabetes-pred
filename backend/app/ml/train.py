@@ -60,7 +60,7 @@ def candidate_pipelines() -> dict[str, Pipeline]:
 
 
 def train_and_select(dataset_path: Path, artifact_path: Path, version: str | None = None) -> dict[str, Any]:
-    """Benchmark candidates, select by training-CV ROC-AUC, then persist one trusted artifact."""
+    """Train all four calibrated candidates and persist a soft-voting ensemble."""
     audit = audit_dataset(dataset_path)
     if not audit.schema_matches_expected:
         raise ValueError("Dataset schema does not exactly match the required tabular classification schema.")
@@ -73,64 +73,61 @@ def train_and_select(dataset_path: Path, artifact_path: Path, version: str | Non
         features, target, test_size=0.2, stratify=target, random_state=RANDOM_SEED
     )
     cv = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_SEED)
+    pipelines: dict[str, Any] = {}
     results: list[CandidateResult] = []
-    for name, pipeline in candidate_pipelines().items():
+    for name, candidate_pipeline in candidate_pipelines().items():
         scores = cross_validate(
-            pipeline,
-            train_features,
-            train_target,
-            cv=cv,
+            candidate_pipeline, train_features, train_target, cv=cv,
             scoring={"accuracy": "accuracy", "roc_auc": "roc_auc", "brier": "neg_brier_score"},
-            n_jobs=1,
-            return_train_score=False,
+            n_jobs=1, return_train_score=False,
         )
-        results.append(
-            CandidateResult(
-                name=name,
-                cv_accuracy_mean=round(float(np.mean(scores["test_accuracy"])), 6),
-                cv_accuracy_std=round(float(np.std(scores["test_accuracy"], ddof=1)), 6),
-                cv_roc_auc_mean=round(float(np.mean(scores["test_roc_auc"])), 6),
-                cv_roc_auc_std=round(float(np.std(scores["test_roc_auc"], ddof=1)), 6),
-                cv_brier_mean=round(float(-np.mean(scores["test_brier"])), 6),
-                cv_brier_std=round(float(np.std(-scores["test_brier"], ddof=1)), 6),
-            )
-        )
-    # Selection is fixed before reading the held-out test set: highest CV ROC-AUC, then lower Brier score, then name.
-    selected = sorted(results, key=lambda item: (-item.cv_roc_auc_mean, item.cv_brier_mean, item.name))[0]
-    selected_pipeline = candidate_pipelines()[selected.name]
-    # Fit calibration only on the training partition after the candidate is selected.
-    pipeline = CalibratedClassifierCV(estimator=selected_pipeline, method="sigmoid", cv=CV_FOLDS)
-    pipeline.fit(train_features, train_target)
-    test_probabilities = pipeline.predict_proba(test_features)[:, 1]
+        results.append(CandidateResult(
+            name=name,
+            cv_accuracy_mean=round(float(np.mean(scores["test_accuracy"])), 6),
+            cv_accuracy_std=round(float(np.std(scores["test_accuracy"], ddof=1)), 6),
+            cv_roc_auc_mean=round(float(np.mean(scores["test_roc_auc"])), 6),
+            cv_roc_auc_std=round(float(np.std(scores["test_roc_auc"], ddof=1)), 6),
+            cv_brier_mean=round(float(-np.mean(scores["test_brier"])), 6),
+            cv_brier_std=round(float(np.std(-scores["test_brier"], ddof=1)), 6),
+        ))
+        calibrated = CalibratedClassifierCV(estimator=candidate_pipeline, method="sigmoid", cv=CV_FOLDS)
+        calibrated.fit(train_features, train_target)
+        pipelines[name] = calibrated
+
+    from app.ml.ensemble import SoftVotingEnsemble
+    ensemble = SoftVotingEnsemble(pipelines)
+    test_probabilities = ensemble.predict_proba(test_features)[:, 1]
     test_metrics = evaluate_binary_classifier(test_target, test_probabilities)
     generated_version = version or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     metadata: dict[str, Any] = {
-        "name": selected.name,
+        "name": "ensemble",
         "version": generated_version,
-        "algorithm": type(selected_pipeline.named_steps["estimator"]).__name__,
+        "algorithm": "SoftVotingEnsemble",
+        "members": list(pipelines.keys()),
+        "ensemble_rule": "Unweighted soft voting: average the positive-class probabilities from all four calibrated models, then classify as positive at probability >= 0.5.",
         "feature_schema": list(FEATURES),
         "schema_version": SCHEMA_VERSION,
         "dataset_sha256": dataset_sha256(dataset_path),
         "dataset_file_name": dataset_path.name,
         "audit": audit.to_dict(),
         "candidate_results": [asdict(result) for result in results],
-        "selection_rule": "Highest 5-fold stratified training-set CV ROC-AUC; ties use lower CV Brier score, then model name. The held-out test set is evaluated only after selection.",
+        "selection_rule": "All four calibrated candidates contribute equally to the ensemble; no single candidate is selected as the sole predictor.",
         "test_metrics": test_metrics,
         "split": {"random_seed": RANDOM_SEED, "test_fraction": 0.2, "test_rows": int(len(test_target)), "training_rows": int(len(train_target)), "cv_folds": CV_FOLDS},
         "preprocessing": "Replace candidate-missing zero values only for Glucose, BloodPressure, SkinThickness, Insulin, and BMI; median impute inside each fold; standardize only logistic regression.",
         "probability_calibrated": True,
-        "calibration": {"method": "sigmoid", "cv_folds": CV_FOLDS, "scope": "training partition only"},
+        "calibration": {"method": "sigmoid", "cv_folds": CV_FOLDS, "scope": "training partition only; ensemble averages member probabilities"},
         "trained_at_utc": datetime.now(UTC).isoformat(),
         "dependency_versions": {"python": platform.python_version(), "scikit_learn": sklearn.__version__, "xgboost": xgboost.__version__},
     }
-    package = {"pipeline": pipeline, "metadata": metadata}
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = artifact_path.with_suffix(".tmp")
-    joblib.dump(package, temporary_path)
+    joblib.dump({"pipeline": ensemble, "pipelines": pipelines, "metadata": metadata}, temporary_path)
     temporary_path.replace(artifact_path)
     metadata["artifact_sha256"] = _file_sha256(artifact_path)
-    metadata_path = artifact_path.with_suffix(".metadata.json")
-    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True), encoding="utf-8")
+    artifact_path.with_suffix(".metadata.json").write_text(
+        json.dumps(metadata, indent=2, sort_keys=True), encoding="utf-8"
+    )
     return metadata
 
 
