@@ -1,41 +1,40 @@
 from __future__ import annotations
 
-# Canonical feature/target schema for the Pima-style diabetes dataset. These
-# column names are the single source of truth for training, inference, and audit.
+# GlucoCare clinical-assessment schema for the replacement 20,000-row dataset.
+# This dataset is a research/educational source and is not clinically validated.
 FEATURES: tuple[str, ...] = (
-    "Pregnancies",
+    "Gender",
+    "Age",
+    "Physical Activity",
+    "Smoking Status",
+    "Alcohol Intake",
     "Glucose",
-    "BloodPressure",
-    "SkinThickness",
+    "Blood Pressure",
+    "Skin Thickness",
     "Insulin",
     "BMI",
-    "DiabetesPedigreeFunction",
-    "Age",
+    "Cholesterol",
+    "Diabetes Pedigree Function",
+    "Family History",
+    "Hypertension",
+)
+CATEGORICAL_FEATURES: tuple[str, ...] = (
+    "Gender",
+    "Physical Activity",
+    "Smoking Status",
+    "Alcohol Intake",
+    "Family History",
+    "Hypertension",
+)
+NUMERIC_FEATURES: tuple[str, ...] = tuple(
+    feature for feature in FEATURES if feature not in CATEGORICAL_FEATURES
 )
 TARGET = "Outcome"
-# Physiologic fields where a zero value is treated as candidate-missing within
-# the preprocessing pipeline only; this is a modeling assumption, not fact.
-ZERO_AS_MISSING_FEATURES: tuple[str, ...] = (
-    "Glucose",
-    "BloodPressure",
-    "SkinThickness",
-    "Insulin",
-    "BMI",
-)
-# Binary indicator columns produced by the preprocessing pipeline, one per
-# candidate-missing feature, recording whether the original value was zero.
-MISSING_INDICATOR_FEATURES: tuple[str, ...] = tuple(
-    f"{feature}_was_missing" for feature in ZERO_AS_MISSING_FEATURES
-)
-# Engineered features added on top of the raw tabular features.
-ENGINEERED_FEATURES: tuple[str, ...] = (
-    "BMI_x_Age",
-    "Glucose_over_BMI",
-    "Pregnancies_over_Age",
-    "Age_bin",
-)
-# Full feature vector presented to each model (raw + engineered).
-MODEL_FEATURES: tuple[str, ...] = (*FEATURES, *ENGINEERED_FEATURES)
+TARGET_POSITIVE = "Diabetic"
+TARGET_NEGATIVE = "Non-diabetic"
 EXPECTED_COLUMNS = (*FEATURES, TARGET)
-SCHEMA_VERSION = "pima-tabular-v2"
-DISCLAIMER = "Research prototype only; not a diagnosis or medical advice."
+SCHEMA_VERSION = "glucocare-clinical-dataset-v1"
+DISCLAIMER = (
+    "Research prototype only. This estimate is not a diagnosis, does not replace "
+    "laboratory testing or a clinician, and must not guide treatment decisions."
+)
