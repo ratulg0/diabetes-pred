@@ -32,6 +32,7 @@ import type {
   AssessmentPage,
   AssessmentRecord,
   DashboardSummary,
+  ModelMetadata,
   Preferences,
 } from "./api/types";
 import { useApiResource } from "./hooks/use-api-resource";
@@ -64,8 +65,18 @@ const displayDate = (date: string) =>
   new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
     new Date(date),
   );
-const classLabel = (record: AssessmentRecord) =>
-  `Model class ${record.predicted_class}`;
+const classLabel = (record: AssessmentRecord) => record.prediction_label;
+const percent = (value: number | undefined | null) =>
+  typeof value === "number" && Number.isFinite(value)
+    ? `${(value * 100).toFixed(1)}%`
+    : "Not available";
+const modelName = (name: string) =>
+  ({
+    logistic_regression: "Logistic Regression",
+    random_forest: "Random Forest",
+    xgboost: "XGBoost",
+    hist_gradient_boosting: "HistGradientBoosting",
+  })[name] ?? name;
 const displayGlucose = (value: number, unit: Preferences["glucose_unit"]) =>
   unit === "mmol/L"
     ? `${(value / 18.0182).toFixed(1)} mmol/L`
@@ -325,6 +336,7 @@ function Dashboard({
           metadata={model.data?.metadata ?? null}
         />
       </div>
+      <BenchmarkTable metadata={model.data?.metadata ?? null} available={model.data?.available ?? false} />
       <div className="mt-6 grid gap-5 lg:grid-cols-2">
         <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
           <h3 className="font-bold text-blue-950">
@@ -390,11 +402,11 @@ function ModelCard({
   metadata,
 }: {
   available: boolean;
-  metadata: Record<string, unknown> | null;
+  metadata: ModelMetadata | null;
 }) {
-  const name =
-    typeof metadata?.name === "string" ? metadata.name : "Unavailable";
-  const version = typeof metadata?.version === "string" ? metadata.version : "";
+  const name = metadata?.name ? modelName(metadata.name) : "Unavailable";
+  const version = metadata?.version ?? "";
+  const accuracy = metadata?.test_metrics?.accuracy;
   return (
     <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
       <p className="text-sm text-slate-500">Model status</p>
@@ -407,11 +419,68 @@ function ModelCard({
         {available ? "Trained and ready" : "Not ready"}
       </p>
       <p className="mt-2 truncate text-xs text-slate-500">
-        {available
-          ? `${name} · ${version}`
-          : "Train a compatible artifact to enable assessments."}
+        {available ? `${name} · ${version}` : "Train a compatible artifact to enable assessments."}
       </p>
+      {available && (
+        <p className="mt-2 text-sm font-semibold text-blue-800">
+          Held-out test accuracy: {percent(accuracy)}
+        </p>
+      )}
     </div>
+  );
+}
+
+function BenchmarkTable({
+  metadata,
+  available,
+}: {
+  metadata: ModelMetadata | null;
+  available: boolean;
+}) {
+  const candidates = metadata?.candidate_results ?? [];
+  if (!available) {
+    return (
+      <div className="mt-6 rounded-2xl border border-amber-100 bg-amber-50 p-5 text-sm text-amber-900">
+        Model benchmark unavailable. Train the four candidates and restart the API to view comparison metrics.
+      </div>
+    );
+  }
+  return (
+    <section className="mt-6 rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="font-bold text-blue-950">Model benchmark</h3>
+          <p className="mt-1 text-sm text-slate-500">All four algorithms are compared using stratified cross-validation. Only the selected winner is used for predictions.</p>
+        </div>
+        <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">Selection: CV ROC-AUC</span>
+      </div>
+      {candidates.length ? (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[650px] text-left text-sm">
+            <thead className="bg-slate-50 text-xs text-slate-500">
+              <tr><th className="p-3">Algorithm</th><th className="p-3">CV accuracy</th><th className="p-3">CV ROC-AUC</th><th className="p-3">CV Brier score ↓</th><th className="p-3">Role</th></tr>
+            </thead>
+            <tbody>
+              {candidates.map((candidate) => {
+                const selected = candidate.name === metadata?.name;
+                return (
+                  <tr key={candidate.name} className="border-t border-slate-100">
+                    <td className="p-3 font-semibold text-blue-950">{modelName(candidate.name)}</td>
+                    <td className="p-3">{percent(candidate.cv_accuracy_mean)}</td>
+                    <td className="p-3">{percent(candidate.cv_roc_auc_mean)}</td>
+                    <td className="p-3">{typeof candidate.cv_brier_mean === "number" ? candidate.cv_brier_mean.toFixed(3) : "—"}</td>
+                    <td className="p-3">{selected ? <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Selected</span> : <span className="text-xs text-slate-500">Benchmarked</span>}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-slate-500">This artifact predates benchmark details. Retrain once to populate all four comparison rows.</p>
+      )}
+      <p className="mt-3 text-xs leading-5 text-slate-500">Cross-validation results are training-set model-selection metrics. Held-out test accuracy for the selected model is shown above; neither metric establishes clinical accuracy or diagnosis.</p>
+    </section>
   );
 }
 
@@ -569,8 +638,18 @@ function Assessment({
             <p className="mt-4 text-2xl font-extrabold text-blue-950">
               {classLabel(result)}
             </p>
-            <p className="mt-2 text-xs text-slate-500">
-              Model: {result.model.name} · {result.model.version}
+            {result.probability !== null && (
+              <p className="mt-2 text-sm text-slate-600">
+                Estimated probability of a positive model result: {percent(result.probability)}
+              </p>
+            )}
+            <div className="mt-4 rounded-xl bg-blue-50 p-3">
+              <p className="text-xs text-blue-700">Selected model test accuracy</p>
+              <p className="mt-1 text-xl font-extrabold text-blue-950">{percent(result.model_accuracy)}</p>
+              <p className="mt-1 text-xs text-blue-700">Measured on a held-out dataset; not confidence in this individual result.</p>
+            </div>
+            <p className="mt-3 text-xs text-slate-500">
+              Model: {modelName(result.model.name)} · {result.model.version}
             </p>
             {notifications && (
               <p className="mt-4 rounded-xl bg-emerald-50 p-3 text-xs text-emerald-800">
@@ -578,7 +657,7 @@ function Assessment({
               </p>
             )}
             <p className="mt-4 text-xs leading-5 text-slate-500">
-              {result.disclaimer}
+              {result.disclaimer} The YES/NO result is a research model estimate and must not be used to diagnose or rule out diabetes.
             </p>
           </div>
         ) : (
