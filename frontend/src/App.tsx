@@ -72,11 +72,8 @@ const percent = (value: number | undefined | null) =>
     ? `${(value * 100).toFixed(1)}%`
     : "Not available";
 const MODEL_NAMES: Record<string, string> = {
-  logistic_regression: "Logistic Regression",
   random_forest: "Random Forest",
-  xgboost: "XGBoost",
-  hist_gradient_boosting: "HistGradientBoosting",
-  ensemble: "Four-model soft-voting ensemble",
+  extra_trees: "Extra Trees",
 };
 const modelName = (name: string) => MODEL_NAMES[name] ?? name;
 const displayGlucose = (value: number | null | undefined, unit: Preferences["glucose_unit"]) =>
