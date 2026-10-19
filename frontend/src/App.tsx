@@ -12,6 +12,7 @@ import {
   Download,
   HeartPulse,
   LayoutDashboard,
+  LoaderCircle,
   Menu,
   Search,
   Settings,
@@ -54,8 +55,6 @@ const CHART = [
 ];
 // Shared UI helpers: input field styling, class-name joiner, date formatter,
 // prediction label, percentage formatter, model name map, and glucose unit display.
-const fieldClass =
-  "mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50";
 const cn = (...items: Array<string | false | undefined>) =>
   items.filter(Boolean).join(" ");
 const displayDate = (date: string) =>
@@ -67,10 +66,6 @@ const classLabel = (record: AssessmentRecord) =>
   (record.predicted_class === 1
     ? "Likely YES for diabetes (model estimate)"
     : "Likely NO for diabetes (model estimate)");
-const percent = (value: number | undefined | null) =>
-  typeof value === "number" && Number.isFinite(value)
-    ? `${(value * 100).toFixed(1)}%`
-    : "Not available";
 const MODEL_NAMES: Record<string, string> = {
   logistic_regression: "Logistic Regression",
   random_forest: "Random Forest",
@@ -670,7 +665,7 @@ function History({ preferences }: { preferences: Preferences }) {
   const records = data?.items ?? [];
   const totalPages = Math.max(1, Math.ceil((data?.total_count ?? 0) / 20));
   const exportRows = () => {
-    const safe = (value: string | number) =>
+    const safe = (value: string | number | undefined) =>
       `"${String(value)
         .replace(/^([=+\-@])/, "'$1")
         .replace(/"/g, '""')}"`;
