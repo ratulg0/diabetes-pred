@@ -16,7 +16,7 @@ def build_preprocessor(scale_numeric: bool = False) -> ColumnTransformer:
     numeric = Pipeline(numeric_steps)
     categorical = Pipeline([
         ("imputer", SimpleImputer(strategy="most_frequent")),
-        ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=True)),
+        ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
     ])
     return ColumnTransformer([
         ("numeric", numeric, list(NUMERIC_FEATURES)),
