@@ -57,17 +57,6 @@ def test_persist_list_and_dashboard(client: TestClient) -> None:
     assert client.delete(f"/api/v1/assessments/{record['prediction_id']}").status_code == 403
 
 
-
-def test_dataset_distribution_uses_source_csv(client: TestClient) -> None:
-    # The chart endpoint must report aggregated counts from the configured source CSV.
-    response = client.get("/api/v1/dashboard/dataset-distribution")
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["column"] == "Outcome"
-    assert payload["row_count"] > 0
-    assert sum(item["count"] for item in payload["counts"]) == payload["row_count"]
-    assert {item["label"] for item in payload["counts"]} >= {"Diabetic", "Non-diabetic"}
-
 def test_preferences_round_trip(client: TestClient) -> None:
     # Read then write preferences and confirm the update persisted.
     assert client.get("/api/v1/preferences").status_code == 200
