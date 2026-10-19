@@ -29,8 +29,8 @@ class Settings(BaseSettings):
 
     @property
     def dataset_path(self) -> Path:
-        # Replace the tracked root diabetes.csv with the supplied 20k-row CSV.
-        return self.project_root / "diabetes.csv"
+        # The clinical assessment and training pipeline use the supplied 20k-row dataset.
+        return self.project_root / "data" / "raw" / "Diabetes Dataset.csv"
 
     @property
     def resolved_model_artifact_path(self) -> Path:
