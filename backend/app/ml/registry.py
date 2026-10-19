@@ -27,6 +27,11 @@ class ModelRegistry:
         self.artifact_path = artifact_path
         self._loaded: LoadedModel | None = None
 
+    def reload(self) -> LoadedModel:
+        """Discard the cached model and load the latest artifact from disk."""
+        self._loaded = None
+        return self.load()
+
     def load(self) -> LoadedModel:
         if self._loaded is not None:
             return self._loaded
