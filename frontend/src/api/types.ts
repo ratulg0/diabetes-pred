@@ -11,10 +11,30 @@ export type AssessmentInput = {
 
 export type ModelIdentity = { name: string; version: string };
 
+export type ModelCandidateResult = {
+  name: string;
+  cv_accuracy_mean: number;
+  cv_accuracy_std: number;
+  cv_roc_auc_mean: number;
+  cv_roc_auc_std: number;
+  cv_brier_mean: number;
+  cv_brier_std: number;
+};
+
+export type ModelMetadata = {
+  name?: string;
+  version?: string;
+  algorithm?: string;
+  candidate_results?: ModelCandidateResult[];
+  test_metrics?: { accuracy?: number; roc_auc?: number; pr_auc?: number };
+};
+
 export type AssessmentRecord = {
   prediction_id: string;
   predicted_class: 0 | 1;
+  prediction_label: string;
   probability: number | null;
+  model_accuracy: number | null;
   model: ModelIdentity;
   disclaimer: string;
   created_at: string;
@@ -44,7 +64,7 @@ export type Preferences = {
 
 export type ModelStatus = {
   available: boolean;
-  metadata: Record<string, unknown> | null;
+  metadata: ModelMetadata | null;
   reason: string | null;
 };
 
