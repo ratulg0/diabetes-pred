@@ -293,16 +293,16 @@ function Dashboard({
   const [retrainMessage, setRetrainMessage] = useState("");
   const [retrainError, setRetrainError] = useState(false);
 
-  async function retrain(modelKey: string) {
-    setRetraining(modelKey);
-    setRetrainMessage(`Retraining ${modelName(modelKey)}. This may take a few minutes…`);
+  async function retrainAll() {
+    setRetraining("all");
+    setRetrainMessage("Training all four models and building the ensemble. This may take a few minutes…");
     setRetrainError(false);
     try {
-      const response = await glucocareApi.retrainModel(modelKey);
+      const response = await glucocareApi.retrainAllModels();
       await model.refresh();
       setRetrainMessage(
         response.available
-          ? `${modelKey === response.metadata?.name ? "Model retrained and activated" : "Model retrained"}: ${modelName(response.metadata?.name ?? modelKey)}.`
+          ? `All four models trained. The soft-voting ensemble is now active (${response.metadata?.version ?? "new version"}).`
           : "Retraining finished, but the API did not report a ready model.",
       );
       setRetrainError(!response.available);
@@ -365,7 +365,7 @@ function Dashboard({
         retraining={retraining}
         retrainMessage={retrainMessage}
         retrainError={retrainError}
-        onRetrain={(name) => void retrain(name)}
+        onRetrainAll={() => void retrainAll()}
       />
       <div className="mt-6 grid gap-5 lg:grid-cols-2">
         <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
