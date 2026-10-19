@@ -1,3 +1,5 @@
+// Shared TypeScript types mirroring the backend API schemas: assessment input,
+// model metadata, records, dashboard summary, preferences, and error body.
 export type AssessmentInput = {
   pregnancies: number;
   glucose: number;

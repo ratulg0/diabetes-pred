@@ -1,7 +1,8 @@
+# API integration tests using FastAPI's TestClient against a temporary SQLite
+# database and an in-process test model artifact.
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
-
 
 PAYLOAD = {
     "pregnancies": 1,
@@ -16,17 +17,20 @@ PAYLOAD = {
 
 
 def test_health_and_ready(client: TestClient) -> None:
+    # Health is always ok; readiness is ready when DB and model are available.
     assert client.get("/api/v1/health").json() == {"status": "ok"}
     assert client.get("/api/v1/ready").json()["status"] == "ready"
 
 
 def test_predict_validation_rejects_unknown_outcome(client: TestClient) -> None:
+    # Extra forbidden fields must be rejected with a 422 validation error.
     response = client.post("/api/v1/assessments/predict", json={**PAYLOAD, "Outcome": 1})
     assert response.status_code == 422
     assert response.json()["code"] == "validation_error"
 
 
 def test_persist_list_and_dashboard(client: TestClient) -> None:
+    # Create, list, fetch, and delete assessments; verify dashboard counts.
     created = client.post("/api/v1/assessments", json=PAYLOAD)
     assert created.status_code == 201
     record = created.json()
@@ -48,8 +52,8 @@ def test_persist_list_and_dashboard(client: TestClient) -> None:
     assert client.delete(f"/api/v1/assessments/{record['prediction_id']}").status_code == 403
 
 
-
 def test_preferences_round_trip(client: TestClient) -> None:
+    # Read then write preferences and confirm the update persisted.
     assert client.get("/api/v1/preferences").status_code == 200
     response = client.put("/api/v1/preferences", json={"glucose_unit": "mmol/L", "compact_tables": True, "assessment_notifications": False})
     assert response.status_code == 200

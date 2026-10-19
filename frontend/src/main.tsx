@@ -1,3 +1,5 @@
+// Application entry point: mounts the React app inside a BrowserRouter and
+// StrictMode, applying global styles.
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'

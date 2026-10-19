@@ -15,6 +15,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Create assessments, prediction_results, model_versions, and user_preferences
+    # tables with indexes for dashboard and history queries.
     op.create_table(
         "assessments",
         sa.Column("id", sa.String(length=36), primary_key=True),
@@ -70,6 +72,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Drop all persistence tables in reverse dependency order.
     op.drop_table("user_preferences")
     op.drop_table("model_versions")
     op.drop_index("ix_prediction_results_predicted_class", table_name="prediction_results")

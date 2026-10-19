@@ -1,3 +1,5 @@
+// Lowest-level API client: fetch wrapper with timeout, JSON handling, and
+// normalized ApiError surfacing for all frontend requests.
 import type { ApiErrorBody } from "./types";
 
 const API_BASE_URL = (
@@ -24,6 +26,7 @@ export async function request<T>(
   init: RequestInit = {},
   timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<T> {
+  // Abort the request after the timeout to avoid hanging indefinitely.
   const controller = new AbortController();
   const timeout = window.setTimeout(
     () => controller.abort(),

@@ -1,3 +1,4 @@
+# ML unit tests: dataset audit schema confirmation and benchmark pipeline coverage.
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,6 +9,7 @@ from app.ml.train import candidate_pipelines
 
 
 def test_dataset_audit_confirms_actual_schema() -> None:
+    # Verify the bundled diabetes.csv matches the expected schema and distributions.
     dataset_path = Path(__file__).resolve().parents[2] / "diabetes.csv"
     audit = audit_dataset(dataset_path)
     assert audit.schema_matches_expected
@@ -18,4 +20,5 @@ def test_dataset_audit_confirms_actual_schema() -> None:
 
 
 def test_all_four_benchmark_pipelines_exist() -> None:
+    # Confirm all four candidate pipeline keys are registered for the ensemble.
     assert set(candidate_pipelines()) == {"logistic_regression", "random_forest", "xgboost", "hist_gradient_boosting"}

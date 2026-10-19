@@ -1,6 +1,8 @@
+// Top-level React, router, charting, API, and type imports used across all pages and components.
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
+// Lucide icon library imports used in navigation, badges, settings toggles, and pagination.
 import {
   Activity,
   Check,
@@ -16,6 +18,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
+// Recharts components for the illustrative glucose area chart on the dashboard.
 import {
   Area,
   AreaChart,
@@ -25,6 +28,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+// API error class, backend service client, shared TypeScript types, and the data-fetching hook.
 import { ApiError } from "./api/client";
 import { glucocareApi } from "./api/glucocare";
 import type {
@@ -37,6 +41,7 @@ import type {
 } from "./api/types";
 import { useApiResource } from "./hooks/use-api-resource";
 
+// Form field schema: all eight Pima dataset features captured as strings during input, plus the empty default state.
 type FormValues = Record<keyof AssessmentInput, string>;
 const EMPTY_FORM: FormValues = {
   pregnancies: "",
@@ -48,6 +53,7 @@ const EMPTY_FORM: FormValues = {
   diabetes_pedigree_function: "",
   age: "",
 };
+// Illustrative sample data for the dashboard area chart (not live CGM data).
 const CHART = [
   { day: "Mon", value: 112 },
   { day: "Tue", value: 126 },
@@ -57,6 +63,8 @@ const CHART = [
   { day: "Sat", value: 145 },
   { day: "Sun", value: 128 },
 ];
+// Shared UI helpers: input field styling, class-name joiner, date formatter,
+// prediction label, percentage formatter, model name map, and glucose unit display.
 const fieldClass =
   "mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50";
 const cn = (...items: Array<string | false | undefined>) =>
@@ -87,6 +95,7 @@ const displayGlucose = (value: number, unit: Preferences["glucose_unit"]) =>
     ? `${(value / 18.0182).toFixed(1)} mmol/L`
     : `${value.toFixed(0)} mg/dL`;
 
+// Notice: reusable alert/empty-state card with optional retry action, used for loading, errors, and empty results.
 function Notice({
   title,
   message,
@@ -116,6 +125,7 @@ function Notice({
   );
 }
 
+// Shell: shared layout wrapper with collapsible sidebar navigation, header, main content area, and research-prototype footer.
 function Shell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const location = useLocation();
@@ -217,6 +227,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Badge: pill showing a record's predicted class as likely YES or NO for diabetes.
 function Badge({ record }: { record: AssessmentRecord }) {
   return (
     <span
@@ -231,6 +242,7 @@ function Badge({ record }: { record: AssessmentRecord }) {
     </span>
   );
 }
+// Records: renders a paginated table of saved assessments with date, age, glucose, and prediction output, or an empty notice.
 function Records({
   records,
   preferences,
@@ -282,6 +294,7 @@ function Records({
   );
 }
 
+// Dashboard: overview page with stat cards, model status/ensemble benchmark table, illustrative chart, and recent assessments list.
 function Dashboard({
   resource,
   preferences,
@@ -404,6 +417,7 @@ function Dashboard({
     </div>
   );
 }
+// Card: small stat card showing a label and large value for dashboard metrics.
 function Card({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
@@ -412,6 +426,7 @@ function Card({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+// ModelCard: displays whether the active model artifact is trained and ready, plus its name and version.
 function ModelCard({
   available,
   metadata,
@@ -439,6 +454,7 @@ function ModelCard({
   );
 }
 
+// BenchmarkTable: ensemble section with retrain-all button, per-candidate training status cards, and the soft-voting decision rule explanation.
 function BenchmarkTable({
   metadata,
   available,
@@ -514,6 +530,7 @@ function BenchmarkTable({
   );
 }
 
+// Assessment: form to create and save a new assessment with field validation, plus the saved server result panel below.
 function Assessment({
   onSaved,
   notifications,
@@ -696,6 +713,7 @@ function Assessment({
   );
 }
 
+// History: paginated assessment history with ID search, model-class filter, CSV export, and previous/next navigation.
 function History({ preferences }: { preferences: Preferences }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"" | "0" | "1">("");
@@ -852,6 +870,7 @@ function History({ preferences }: { preferences: Preferences }) {
     </div>
   );
 }
+// PreferencesPage: local display settings for glucose unit, compact tables, and assessment notifications, persisted via the API.
 function PreferencesPage({
   preferences,
   reload,
@@ -943,6 +962,7 @@ function PreferencesPage({
     </div>
   );
 }
+// Setting: accessible toggle switch row for a boolean preference with label and description.
 function Setting({
   label,
   description,
@@ -980,6 +1000,7 @@ function Setting({
     </div>
   );
 }
+// App: root component wiring API resources and preferences into the routed Shell layout across dashboard, assessment, history, and settings.
 export default function App() {
   const dashboard = useApiResource(glucocareApi.getDashboard, []);
   const preferenceResource = useApiResource(glucocareApi.getPreferences, []);

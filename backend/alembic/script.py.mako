@@ -1,3 +1,4 @@
+# Jinja2 template used by Alembic to scaffold new migration revision files.
 """${message}
 
 Revision ID: ${up_revision}

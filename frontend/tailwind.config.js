@@ -1,3 +1,5 @@
+// Tailwind CSS configuration. Scans index.html and all source files for class
+// names, extends the theme with GlucoCare brand colors and a soft shadow.
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],

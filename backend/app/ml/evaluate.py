@@ -1,3 +1,4 @@
+# Binary classification evaluation metrics computed on held-out test data.
 from __future__ import annotations
 
 from typing import Any
@@ -16,6 +17,8 @@ from sklearn.metrics import (
 
 
 def evaluate_binary_classifier(y_true: Any, probabilities: np.ndarray, threshold: float = 0.5) -> dict[str, float | int]:
+    # Compute a suite of classification metrics at the given decision threshold,
+    # including counts for transparency.
     predicted = (probabilities >= threshold).astype(int)
     true_negative, false_positive, false_negative, true_positive = confusion_matrix(y_true, predicted, labels=[0, 1]).ravel()
     specificity = true_negative / (true_negative + false_positive) if true_negative + false_positive else 0.0

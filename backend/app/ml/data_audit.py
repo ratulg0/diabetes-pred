@@ -1,3 +1,5 @@
+# Aggregate-only dataset diagnostics for the diabetes CSV. Individual records are
+# never emitted; only schema, distribution, and range summaries are produced.
 from __future__ import annotations
 
 import hashlib
@@ -34,6 +36,7 @@ class DatasetAudit:
 
 
 def dataset_sha256(path: Path) -> str:
+    # Compute the file's SHA-256 digest in streaming chunks.
     digest = hashlib.sha256()
     with path.open("rb") as source:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
@@ -42,7 +45,7 @@ def dataset_sha256(path: Path) -> str:
 
 
 def audit_dataset(path: Path) -> DatasetAudit:
-    """Return aggregate-only dataset diagnostics; individual records are never emitted."""
+    # Return aggregate-only dataset diagnostics; individual records are never emitted.
     frame = pd.read_csv(path)
     actual_columns = list(frame.columns)
     expected = set(EXPECTED_COLUMNS)

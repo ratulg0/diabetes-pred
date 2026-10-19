@@ -1,3 +1,5 @@
+// TypeScript compiler configuration for the frontend. Strict mode, ESNext
+// modules, React JSX transform, and noUnusedLocals/Parameters for safety.
 {
   "compilerOptions": {
     "target": "ES2020",

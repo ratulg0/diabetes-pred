@@ -1,3 +1,5 @@
+# Model status and retrain-all routes. Exposes artifact availability and
+# triggers full benchmark retraining into the soft-voting ensemble.
 from __future__ import annotations
 
 import asyncio
@@ -14,11 +16,13 @@ from app.schemas.models import ModelStatusResponse
 
 router = APIRouter(prefix="/models", tags=["models"])
 logger = logging.getLogger("glucocare.models")
+# Serialize retraining so only one training job runs at a time.
 _retraining_lock = Lock()
 
 
 @router.get("", response_model=ModelStatusResponse)
 def model_status(model_registry: ModelRegistry = Depends(get_model_registry)) -> ModelStatusResponse:
+    # Return whether a trusted artifact is available along with its metadata.
     current = model_registry.status()
     if current["available"]:
         return ModelStatusResponse(available=True, metadata=current["metadata"])
@@ -31,6 +35,7 @@ async def retrain_all_models(
     model_registry: ModelRegistry = Depends(get_model_registry),
 ) -> ModelStatusResponse:
     """Retrain all four candidates and activate their soft-voting ensemble."""
+    # Guard against concurrent retraining jobs.
     if not _retraining_lock.acquire(blocking=False):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

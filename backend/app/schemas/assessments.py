@@ -1,3 +1,6 @@
+# Request/response schemas for the assessments feature. AssessmentInput is the
+# validated patient feature vector; PredictionResponse is the model output
+# envelope; AssessmentRecord adds persistence fields on top.
 from __future__ import annotations
 
 from datetime import datetime
@@ -8,6 +11,7 @@ from app.ml.schema import DISCLAIMER
 
 
 class AssessmentInput(BaseModel):
+    """Patient feature vector with per-field clinical bounds; extra fields rejected."""
     model_config = ConfigDict(extra="forbid")
 
     pregnancies: int = Field(ge=0, le=25)
@@ -20,6 +24,7 @@ class AssessmentInput(BaseModel):
     age: int = Field(ge=1, le=120)
 
     def canonical_features(self) -> dict[str, float | int]:
+        """Map snake_case inputs to the dataset column names the model expects."""
         return {
             "Pregnancies": self.pregnancies,
             "Glucose": self.glucose,
@@ -38,6 +43,7 @@ class ModelIdentity(BaseModel):
 
 
 class PredictionResponse(BaseModel):
+    """Model output returned for both predict and saved-assessment endpoints."""
     prediction_id: str
     predicted_class: int = Field(ge=0, le=1)
     prediction_label: str
@@ -48,12 +54,14 @@ class PredictionResponse(BaseModel):
 
 
 class AssessmentRecord(PredictionResponse):
+    """Persisted assessment including timestamp, source, and original inputs."""
     created_at: datetime
     source: str
     input: AssessmentInput
 
 
 class AssessmentPage(BaseModel):
+    """Paginated list of assessment records with total count."""
     items: list[AssessmentRecord]
     page: int
     page_size: int

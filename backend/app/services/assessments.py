@@ -1,3 +1,5 @@
+# Business logic for running model predictions and persisting assessment
+# records. Keeps ML inference and database write concerns out of route handlers.
 from __future__ import annotations
 
 import json
@@ -17,6 +19,7 @@ class AssessmentService:
         self.repository = repository or AssessmentRepository()
 
     def predict(self, inputs: AssessmentInput) -> PredictionResponse:
+        # Run inference against the trusted artifact without persisting anything.
         predicted_class, probability, metadata = self.model_registry.predict(inputs.canonical_features())
         return PredictionResponse(
             prediction_id="not-persisted",
@@ -29,6 +32,7 @@ class AssessmentService:
         )
 
     def predict_and_save(self, session: Session, inputs: AssessmentInput) -> AssessmentRecord:
+        # Run inference and persist assessment plus prediction result atomically.
         predicted_class, probability, metadata = self.model_registry.predict(inputs.canonical_features())
         assessment = self.repository.create_with_result(
             session=session,
@@ -43,16 +47,19 @@ class AssessmentService:
 
 
 def prediction_label(predicted_class: int) -> str:
+    # Human-readable YES/NO label derived from the binary model output.
     return "Likely YES for diabetes (model estimate)" if predicted_class == 1 else "Likely NO for diabetes (model estimate)"
 
 
 def _test_accuracy(metadata: dict) -> float | None:
+    # Extract held-out test accuracy from artifact metadata if present.
     metrics = metadata.get("test_metrics", {})
     accuracy = metrics.get("accuracy") if isinstance(metrics, dict) else None
     return float(accuracy) if isinstance(accuracy, (int, float)) else None
 
 
 def assessment_to_record(assessment: Assessment) -> AssessmentRecord:
+    # Hydrate a persisted Assessment ORM row into an API response schema.
     if assessment.result is None:
         raise ValueError("Persisted assessment is missing its prediction result.")
     try:

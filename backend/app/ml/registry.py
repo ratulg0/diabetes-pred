@@ -1,3 +1,5 @@
+# Model artifact loading, checksum verification, and inference. The registry
+# guards against missing, invalid, or tampered model packages.
 from __future__ import annotations
 
 import hashlib
@@ -28,11 +30,12 @@ class ModelRegistry:
         self._loaded: LoadedModel | None = None
 
     def reload(self) -> LoadedModel:
-        """Discard the cached model and load the latest artifact from disk."""
+        # Discard the cached model and load the latest artifact from disk.
         self._loaded = None
         return self.load()
 
     def load(self) -> LoadedModel:
+        # Load and validate the artifact package, caching the result in memory.
         if self._loaded is not None:
             return self._loaded
         if not self.artifact_path.is_file():
@@ -56,6 +59,7 @@ class ModelRegistry:
         return self._loaded
 
     def status(self) -> dict[str, Any]:
+        # Report availability and metadata, or the reason the model is unavailable.
         try:
             model = self.load()
             return {"available": True, "metadata": model.metadata}
@@ -67,6 +71,7 @@ class ModelRegistry:
         return predicted_class, metadata
 
     def predict(self, values: dict[str, float | int]) -> tuple[int, float | None, dict[str, Any]]:
+        # Run inference: build a feature frame, predict class and calibrated probability.
         loaded = self.load()
         frame = pd.DataFrame([{feature: values[feature] for feature in FEATURES}], columns=list(FEATURES))
         predicted_class = int(loaded.pipeline.predict(frame)[0])
@@ -77,6 +82,7 @@ class ModelRegistry:
 
 
 def _file_sha256(path: Path) -> str:
+    # Compute the SHA-256 digest of an artifact file in streaming chunks.
     digest = hashlib.sha256()
     with path.open("rb") as source:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):

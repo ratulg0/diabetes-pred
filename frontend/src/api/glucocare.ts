@@ -1,3 +1,5 @@
+// Frontend API service layer wrapping the request client for each backend
+// endpoint under /api/v1.
 import { request } from "./client";
 import type {
   AssessmentInput,

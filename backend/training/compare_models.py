@@ -1,3 +1,5 @@
+# Standalone training script: runs the full benchmark and persists the ensemble
+# artifact, printing metadata as JSON.
 from __future__ import annotations
 
 import json

@@ -1,3 +1,5 @@
+// Custom hook that wraps an async data loader with loading/error state and a
+// refresh function. Callers control reloads via an explicit dependency array.
 import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "../api/client";
 

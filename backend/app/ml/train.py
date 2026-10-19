@@ -1,3 +1,6 @@
+# Training entry point: audits the dataset, trains four calibrated candidate
+# pipelines, combines them into a soft-voting ensemble, and persists the artifact
+# with metadata and checksum sidecar.
 from __future__ import annotations
 
 import hashlib
@@ -42,7 +45,7 @@ class CandidateResult:
 
 
 def candidate_pipelines() -> dict[str, Pipeline]:
-    """Return fresh, leakage-safe pipelines for all required benchmark candidates."""
+    # Return fresh, leakage-safe pipelines for all required benchmark candidates.
     return {
         "logistic_regression": Pipeline(
             [("preprocessor", build_preprocessor(scale=True)), ("estimator", LogisticRegression(max_iter=2000, random_state=RANDOM_SEED))]
@@ -60,7 +63,8 @@ def candidate_pipelines() -> dict[str, Pipeline]:
 
 
 def train_and_select(dataset_path: Path, artifact_path: Path, version: str | None = None) -> dict[str, Any]:
-    """Train all four calibrated candidates and persist a soft-voting ensemble."""
+    # Train all four calibrated candidates and persist a soft-voting ensemble
+    # artifact with full metadata and a checksum sidecar.
     audit = audit_dataset(dataset_path)
     if not audit.schema_matches_expected:
         raise ValueError("Dataset schema does not exactly match the required tabular classification schema.")
@@ -69,6 +73,7 @@ def train_and_select(dataset_path: Path, artifact_path: Path, version: str | Non
     target = frame[TARGET]
     if set(target.unique()) - {0, 1}:
         raise ValueError("Outcome must contain only binary values 0 and 1.")
+    # Deterministic stratified train/test split for held-out evaluation.
     train_features, test_features, train_target, test_target = train_test_split(
         features, target, test_size=0.2, stratify=target, random_state=RANDOM_SEED
     )
@@ -90,6 +95,7 @@ def train_and_select(dataset_path: Path, artifact_path: Path, version: str | Non
             cv_brier_mean=round(float(-np.mean(scores["test_brier"])), 6),
             cv_brier_std=round(float(np.std(-scores["test_brier"], ddof=1)), 6),
         ))
+        # Calibrate each candidate with sigmoid calibration on the training partition.
         calibrated = CalibratedClassifierCV(estimator=candidate_pipeline, method="sigmoid", cv=CV_FOLDS)
         calibrated.fit(train_features, train_target)
         pipelines[name] = calibrated
@@ -146,7 +152,7 @@ def retrain_candidate(
     version: str | None = None,
     previous_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Retrain one supported candidate and make it the active inference artifact."""
+    # Retrain one supported candidate and make it the active inference artifact.
     pipelines = candidate_pipelines()
     if model_name not in pipelines:
         raise ValueError(f"Unsupported model name: {model_name}")

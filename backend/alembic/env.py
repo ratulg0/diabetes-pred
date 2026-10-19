@@ -1,3 +1,5 @@
+# Alembic environment configuration: binds the SQLAlchemy URL from settings and
+# registers the declarative model metadata for autogenerate support.
 from __future__ import with_statement
 
 from alembic import context
@@ -16,12 +18,14 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
+    # Run migrations without a live database connection (emits SQL only).
     context.configure(url=settings.database_url, target_metadata=target_metadata, literal_binds=True, dialect_opts={"paramstyle": "named"})
     with context.begin_transaction():
         context.run_migrations()
 
 
 def run_migrations_online() -> None:
+    # Run migrations against a live database using a NullPool connection.
     connectable = engine_from_config(config.get_section(config.config_ini_section, {}), prefix="sqlalchemy.", poolclass=pool.NullPool)
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)

@@ -1,3 +1,5 @@
+# Persistence operations for assessments and prediction results. Encapsulates
+# all SQL queries so API handlers remain thin.
 from __future__ import annotations
 
 import json
@@ -21,6 +23,8 @@ class AssessmentRepository:
         model_name: str,
         model_version: str,
     ) -> Assessment:
+        # Insert one assessment row plus one linked prediction result atomically,
+        # rolling back on any failure.
         assessment = Assessment(id=str(uuid4()), schema_version="pima-tabular-v1", **inputs.model_dump())
         result = PredictionResult(
             id=str(uuid4()),
@@ -40,7 +44,11 @@ class AssessmentRepository:
         session.refresh(assessment)
         return assessment
 
-    def list(self, session: Session, offset: int, limit: int, predicted_class: int | None, search: str | None = None) -> tuple[list[Assessment], int]:
+    def list(
+        self, session: Session, offset: int, limit: int, predicted_class: int | None, search: str | None = None
+    ) -> tuple[list[Assessment], int]:
+        # Return paginated assessment rows (eagerly loading results), optionally
+        # filtered by predicted class or ID substring, plus the total count.
         statement: Select[tuple[Assessment]] = select(Assessment).options(joinedload(Assessment.result)).order_by(Assessment.created_at.desc())
         count_statement = select(func.count(Assessment.id))
         if predicted_class is not None:
@@ -54,10 +62,12 @@ class AssessmentRepository:
         return items, total
 
     def get(self, session: Session, assessment_id: str) -> Assessment | None:
+        # Fetch a single assessment by ID with its prediction result eager-loaded.
         statement = select(Assessment).options(joinedload(Assessment.result)).where(Assessment.id == assessment_id)
         return session.scalar(statement)
 
     def delete(self, session: Session, assessment: Assessment) -> None:
+        # Delete an assessment row, rolling back the transaction on failure.
         try:
             session.delete(assessment)
             session.commit()
@@ -66,8 +76,10 @@ class AssessmentRepository:
             raise
 
     def count(self, session: Session) -> int:
+        # Total number of stored assessment rows.
         return int(session.scalar(select(func.count(Assessment.id))) or 0)
 
     def count_by_class(self, session: Session, predicted_class: int) -> int:
+        # Count prediction results matching the given class (0 or 1).
         statement = select(func.count(PredictionResult.id)).where(PredictionResult.predicted_class == predicted_class)
         return int(session.scalar(statement) or 0)

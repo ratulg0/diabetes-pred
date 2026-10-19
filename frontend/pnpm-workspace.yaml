@@ -1,2 +1,3 @@
+# pnpm workspace configuration enabling builds for esbuild.
 allowBuilds:
   esbuild: set this to true or false

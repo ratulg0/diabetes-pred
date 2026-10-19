@@ -1,3 +1,5 @@
+// Global CSS foundation: Tailwind base/components/utilities plus custom
+// root variables, focus styles, and a thin custom scrollbar.
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

@@ -1,3 +1,5 @@
+# SQLAlchemy ORM table definitions for assessments, prediction results, model
+# versions, and user preferences. Each class maps to a database table.
 from __future__ import annotations
 
 from datetime import datetime
@@ -68,5 +70,6 @@ class UserPreference(Base):
     assessment_notifications: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
+# Indexes to speed up common dashboard and history queries.
 Index("ix_assessments_created_at", Assessment.created_at)
 Index("ix_prediction_results_predicted_class", PredictionResult.predicted_class)

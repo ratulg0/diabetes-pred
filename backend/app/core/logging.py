@@ -1,3 +1,5 @@
+# Configures application-wide logging once at startup. Kept concise and
+# deliberately excludes request bodies and health data to avoid leaking PII.
 from __future__ import annotations
 
 import logging

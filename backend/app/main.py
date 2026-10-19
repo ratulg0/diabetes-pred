@@ -1,3 +1,5 @@
+# Application factory: builds the FastAPI app, wires lifespan startup/shutdown,
+# CORS, middleware, error handlers, and all versioned API routers.
 from __future__ import annotations
 
 import asyncio
@@ -24,11 +26,14 @@ logger = logging.getLogger("glucocare.api")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
+    # Build and configure the FastAPI application instance.
     runtime_settings = settings or get_settings()
     configure_logging(runtime_settings.log_level)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        # Startup: configure DB, create tables for local dev, load registry, and
+        # optionally train all four models into the ensemble.
         app.state.settings = runtime_settings
         app.state.database = Database(runtime_settings.resolved_database_url)
         if runtime_settings.uses_local_development_database:
@@ -79,6 +84,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 
 def _add_operational_handlers(app: FastAPI) -> None:
+    # Add request-ID middleware, validation, and HTTP error handlers.
     @app.middleware("http")
     async def request_context(request: Request, call_next: Callable[[Request], Response]) -> Response:
         request_id = request.headers.get("X-Request-ID", str(uuid4()))

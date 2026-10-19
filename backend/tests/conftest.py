@@ -1,3 +1,5 @@
+# Pytest fixtures: builds a TestClient with a temp SQLite DB and a small local
+# test model artifact for API tests.
 from __future__ import annotations
 
 from pathlib import Path
@@ -18,6 +20,8 @@ from app.ml.schema import FEATURES, SCHEMA_VERSION
 
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
+    # Build a small test model artifact and a temporary SQLite database, then
+    # create the app and yield a TestClient with tables created.
     artifact_path = tmp_path / "test-model.joblib"
     training_features = pd.DataFrame(
         [
