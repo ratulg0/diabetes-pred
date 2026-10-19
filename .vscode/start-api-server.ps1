@@ -16,7 +16,7 @@ function Test-ApiServer {
 
 if (Test-ApiServer) { exit 0 }
 if (-not (Test-Path -LiteralPath $artifactPath)) {
-    throw "No trained model artifact exists. Run 'python -m training.compare_models' from backend before starting GlucoCare."
+    throw "No trained model artifact exists. Run 'python -m app.ml.train' from the backend directory before starting GlucoCare."
 }
 
 $python = (Get-Command python.exe -ErrorAction Stop).Source

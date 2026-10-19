@@ -21,6 +21,15 @@ from app.ml.schema import (
 )
 
 
+def replace_candidate_missing_zeros(frame: pd.DataFrame) -> pd.DataFrame:
+    # Replace physiologic zero values with NaN for candidate-missing features
+    # so the imputer can treat them as missing rather than valid zeros.
+    copied = frame.copy()
+    for feature in ZERO_AS_MISSING_FEATURES:
+        copied[feature] = copied[feature].replace(0, np.nan)
+    return copied
+
+
 def add_engineered_features(frame: pd.DataFrame) -> pd.DataFrame:
     # Derive interaction, ratio, and binned features from the raw Pima columns.
     copied = frame.loc[:, list(FEATURES)].astype(float).copy()
@@ -49,6 +58,10 @@ def build_preprocessor(scale: bool) -> Pipeline:
     #   engineered features -> missingness indicators -> IterativeImputer (MICE)
     #   -> optional StandardScaler
     steps: list[tuple[str, object]] = [
+        (
+            "replace_candidate_missing_zeros",
+            FunctionTransformer(replace_candidate_missing_zeros, validate=False),
+        ),
         (
             "engineered_features",
             FunctionTransformer(add_engineered_features, validate=False),
