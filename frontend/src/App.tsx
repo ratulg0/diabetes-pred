@@ -541,177 +541,109 @@ function Assessment({
   onSaved: () => void;
   notifications: boolean;
 }) {
-  const [values, setValues] = useState<FormValues>(EMPTY_FORM);
+  const [values, setValues] = useState<Record<string, string>>({});
   const [result, setResult] = useState<AssessmentRecord | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const fields: Array<[keyof AssessmentInput, string, number, number, string]> =
-    [
-      ["pregnancies", "Pregnancies", 0, 25, "count"],
-      ["glucose", "Glucose", 0, 400, "mg/dL"],
-      ["blood_pressure", "Blood pressure", 0, 250, "mmHg"],
-      ["skin_thickness", "Skin thickness", 0, 150, "mm"],
-      ["insulin", "Insulin", 0, 1000, "μU/mL"],
-      ["bmi", "BMI", 0.1, 100, "kg/m²"],
-      [
-        "diabetes_pedigree_function",
-        "Diabetes pedigree function",
-        0,
-        5,
-        "score",
-      ],
-      ["age", "Age", 1, 120, "years"],
-    ];
-  const update = (key: keyof AssessmentInput, value: string) => {
-    setValues((current) => ({ ...current, [key]: value }));
-    setErrors((current) => ({ ...current, [key]: "" }));
-  };
+
+  const fields = [
+    { key: "gender", label: "Gender", kind: "select", options: ["Female", "Male"] },
+    { key: "age", label: "Age (years)", kind: "number", min: 1, max: 120, required: true },
+    { key: "physical_activity", label: "Physical activity", kind: "select", options: ["Low", "Moderate", "High"] },
+    { key: "smoking_status", label: "Smoking status", kind: "select", options: ["Never", "Former", "Current"] },
+    { key: "alcohol_intake", label: "Alcohol intake", kind: "select", options: ["Occasional", "Regular"] },
+    { key: "glucose", label: "Glucose", kind: "number", min: 0, max: 600, hint: "Use the same unit as the source dataset." },
+    { key: "blood_pressure", label: "Blood pressure", kind: "number", min: 0, max: 300 },
+    { key: "skin_thickness", label: "Skin thickness", kind: "number", min: 0, max: 150 },
+    { key: "insulin", label: "Insulin", kind: "number", min: 0, max: 3000 },
+    { key: "bmi", label: "BMI", kind: "number", min: 0, max: 100 },
+    { key: "cholesterol", label: "Cholesterol", kind: "number", min: 0, max: 1000 },
+    { key: "diabetes_pedigree_function", label: "Diabetes pedigree function", kind: "number", min: 0, max: 10 },
+    { key: "family_history", label: "Family history", kind: "select", options: ["No", "Yes"] },
+    { key: "hypertension", label: "Hypertension", kind: "select", options: ["No", "Yes"] },
+  ] as const;
+
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (saving) return;
-    const next: Record<string, string> = {};
-    const input = {} as AssessmentInput;
-    fields.forEach(([key, label, min, max]) => {
-      const value = Number(values[key]);
-      if (
-        !values[key] ||
-        !Number.isFinite(value) ||
-        value < min ||
-        value > max ||
-        ((key === "age" || key === "pregnancies") && !Number.isInteger(value))
-      )
-        next[key] = `${label} must be between ${min} and ${max}.`;
-      else input[key] = value;
-    });
-    if (Object.keys(next).length) {
-      setErrors(next);
+    setError("");
+    setResult(null);
+    if (!values.age || !values.gender || !values.physical_activity || !values.smoking_status ||
+        !values.alcohol_intake || !values.family_history || !values.hypertension) {
+      setError("Complete the demographic and categorical fields. Numeric measurements may be left blank if unavailable.");
       return;
     }
+    const numericKeys = ["age", "glucose", "blood_pressure", "skin_thickness", "insulin", "bmi", "cholesterol", "diabetes_pedigree_function"];
+    const payload = Object.fromEntries(fields.map((field) => {
+      const raw = values[field.key];
+      return [field.key, numericKeys.includes(field.key) ? (raw === undefined || raw === "" ? null : Number(raw)) : raw];
+    })) as AssessmentInput;
     setSaving(true);
-    setMessage("");
     try {
-      setResult(await glucocareApi.createAssessment(input));
+      const saved = await glucocareApi.createAssessment(payload);
+      setResult(saved);
       onSaved();
     } catch (caught) {
-      const error =
-        caught instanceof ApiError
-          ? caught
-          : new ApiError("Assessment could not be saved.");
-      setErrors(error.fieldErrors);
-      setMessage(error.message);
+      setError(caught instanceof ApiError ? caught.message : "The assessment could not run. Check that the backend and trained model are ready.");
     } finally {
       setSaving(false);
     }
   }
+
   return (
-    <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[1fr_300px]">
-      <form
-        onSubmit={submit}
-        className="rounded-2xl border border-blue-100 bg-white p-6 shadow-soft"
-      >
-        <h2 className="text-2xl font-extrabold text-blue-950">
-          Create a saved assessment
-        </h2>
-        <p className="mt-1 text-sm text-slate-500">
-          The server validates and runs the saved model. Inputs use the model’s
-          required units.
+    <div className="mx-auto max-w-6xl">
+      <div className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-white p-6 sm:p-8">
+        <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Replacement dataset · 14 input features</p>
+        <h2 className="mt-2 text-2xl font-extrabold text-blue-950">Clinical assessment research prototype</h2>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
+          This form now matches the uploaded 20,000-row dataset, including demographics, lifestyle indicators and laboratory-style measurements. Leave unavailable numeric measurements blank; the trained pipeline imputes missing values.
         </p>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          {fields.map(([key, label, min, max, unit]) => (
-            <label key={key} className="text-sm font-semibold text-slate-700">
-              {label}{" "}
-              <span className="float-right text-xs font-normal text-slate-400">
-                {unit}
-              </span>
-              <input
-                className={cn(fieldClass, errors[key] && "border-rose-400")}
-                type="number"
-                min={min}
-                max={max}
-                step={
-                  key === "bmi" || key === "diabetes_pedigree_function"
-                    ? "0.01"
-                    : "1"
-                }
-                value={values[key]}
-                onChange={(event) => update(key, event.target.value)}
-                aria-invalid={Boolean(errors[key])}
-              />
-              {errors[key] && (
-                <span className="mt-1 block text-xs text-rose-700">
-                  {errors[key]}
-                </span>
+        <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-5 text-amber-900">
+          Important: this dataset and model have not been clinically validated. Results only reproduce the dataset's Diabetic / Non-diabetic label pattern; they are not a diagnosis and must not guide treatment or replace a clinician.
+        </p>
+      </div>
+
+      <form onSubmit={submit} className="mt-6 rounded-2xl border border-blue-100 bg-white p-5 shadow-soft sm:p-7">
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {fields.map((field) => (
+            <label key={field.key} className="block text-sm font-semibold text-slate-700">
+              <span>{field.label}</span>
+              {"hint" in field && field.hint && <span className="mt-1 block text-xs font-normal text-slate-400">{field.hint}</span>}
+              {field.kind === "select" ? (
+                <select required value={values[field.key] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [field.key]: e.target.value }))}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                  <option value="" disabled>Select an answer</option>
+                  {field.options.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
+              ) : (
+                <input type="number" required={field.key === "age"} min={field.min} max={field.max} step="any"
+                  value={values[field.key] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [field.key]: e.target.value }))}
+                  placeholder={field.key === "age" ? "Enter age" : "Optional if unavailable"}
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5" />
               )}
             </label>
           ))}
         </div>
-        {message && (
-          <p
-            role="alert"
-            className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700"
-          >
-            {message}
-          </p>
-        )}
-        <div className="mt-6 flex justify-between border-t border-slate-100 pt-5">
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => {
-              setValues(EMPTY_FORM);
-              setResult(null);
-              setErrors({});
-              setMessage("");
-            }}
-            className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600"
-          >
-            Clear fields
-          </button>
-          <button
-            disabled={saving}
-            className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60"
-          >
-            {saving ? "Saving…" : "Save and run model"}
+        {error && <p role="alert" className="mt-5 rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
+          <button type="button" disabled={saving} onClick={() => { setValues({}); setResult(null); setError(""); }}
+            className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600">Clear fields</button>
+          <button disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60">
+            {saving ? <LoaderCircle size={16} className="animate-spin" /> : <Activity size={16} />}
+            {saving ? "Running assessment…" : "Run clinical assessment"}
           </button>
         </div>
       </form>
-      <div>
-        {result ? (
-          <div
-            role="status"
-            className="rounded-2xl border border-blue-100 bg-white p-5 shadow-soft"
-          >
-            <p className="text-xs font-bold uppercase text-slate-400">
-              Saved server result
-            </p>
-            <p className="mt-4 text-2xl font-extrabold text-blue-950">
-              {classLabel(result)}
-            </p>
-            {result.probability !== null && (
-              <p className="mt-2 text-sm text-slate-600">
-                Estimated probability of a positive model result: {percent(result.probability)}
-              </p>
-            )}
-            <p className="mt-3 text-xs text-slate-500">
-              Model: {modelName(result.model.name)} · {result.model.version}
-            </p>
-            {notifications && (
-              <p className="mt-4 rounded-xl bg-emerald-50 p-3 text-xs text-emerald-800">
-                Assessment saved successfully.
-              </p>
-            )}
-            <p className="mt-4 text-xs leading-5 text-slate-500">
-              {result.disclaimer} The YES/NO result is a research model estimate and must not be used to diagnose or rule out diabetes.
-            </p>
-          </div>
-        ) : (
-          <Notice
-            title="Your server result will appear here"
-            message="A successful submission creates one saved record."
-          />
-        )}
-      </div>
+
+      {result && (
+        <section role="status" className="mt-6 rounded-2xl border border-blue-100 bg-white p-6 shadow-soft">
+          <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Saved model output</p>
+          <h3 className="mt-2 text-xl font-extrabold text-blue-950">{result.prediction_label}</h3>
+          {result.probability !== null && <p className="mt-2 text-sm text-slate-600">Model score for dataset class Diabetic: <strong>{(result.probability * 100).toFixed(1)}%</strong></p>}
+          <p className="mt-2 text-xs text-slate-400">Model: {result.model.name} · Version {result.model.version} · {displayDate(result.created_at)}</p>
+          <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm leading-5 text-amber-900"><ShieldCheck size={17} className="mr-2 inline" />{result.disclaimer}</p>
+          {notifications && <p className="mt-4 rounded-xl bg-emerald-50 p-3 text-xs text-emerald-800">Assessment saved successfully.</p>}
+        </section>
+      )}
     </div>
   );
 }
