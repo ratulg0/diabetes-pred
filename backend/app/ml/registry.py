@@ -49,7 +49,7 @@ class ModelRegistry:
         if pipeline is None:
             raise ModelUnavailableError("The model artifact has no usable pipeline.")
         metadata = package["metadata"]
-        # The API accepts the 8 raw FEATURES; the pipeline engineers the rest.
+        # The API accepts the raw clinical FEATURES; each ensemble member preprocesses them.
         if metadata.get("feature_schema") != list(FEATURES):
             raise ModelUnavailableError("The model artifact feature schema does not match this API.")
         sidecar_path = self.artifact_path.with_suffix(".metadata.json")
