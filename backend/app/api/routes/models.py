@@ -1,4 +1,4 @@
-# Model status and retraining routes for the four-model soft-voting clinical ensemble.
+# Model status and retraining routes for the active replacement-dataset classifier.
 from __future__ import annotations
 
 import asyncio
@@ -42,7 +42,7 @@ async def retrain_all_models(
     request: Request,
     model_registry: ModelRegistry = Depends(get_model_registry),
 ) -> ModelStatusResponse:
-    """Retrain all four classifiers and activate their equal-weight soft-voting ensemble."""
+    """Re-evaluate the supported candidates and activate the best replacement-dataset model."""
     # Guard against concurrent retraining jobs.
     if not _retraining_lock.acquire(blocking=False):
         raise HTTPException(
@@ -70,7 +70,7 @@ async def retrain_all_models(
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
     except Exception as error:
-        logger.exception("clinical_model_retraining_failed")
+        logger.exception("ensemble_retraining_failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="The models could not be retrained. Check the backend logs for details.",

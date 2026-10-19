@@ -49,7 +49,7 @@ class ModelRegistry:
         if pipeline is None:
             raise ModelUnavailableError("The model artifact has no usable pipeline.")
         metadata = package["metadata"]
-        # The API accepts the raw clinical FEATURES; each ensemble member preprocesses them.
+        # The API accepts the 8 raw FEATURES; the pipeline engineers the rest.
         if metadata.get("feature_schema") != list(FEATURES):
             raise ModelUnavailableError("The model artifact feature schema does not match this API.")
         sidecar_path = self.artifact_path.with_suffix(".metadata.json")
@@ -72,11 +72,11 @@ class ModelRegistry:
         except ModelUnavailableError as error:
             return {"available": False, "reason": str(error)}
 
-    def predict_class(self, values: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    def predict_class(self, values: dict[str, float | int]) -> tuple[int, dict[str, Any]]:
         predicted_class, _, metadata = self.predict(values)
         return predicted_class, metadata
 
-    def predict(self, values: dict[str, Any]) -> tuple[int, float | None, dict[str, Any]]:
+    def predict(self, values: dict[str, float | int]) -> tuple[int, float | None, dict[str, Any]]:
         # Run inference: build a feature frame, predict class and calibrated probability.
         loaded = self.load()
         frame = pd.DataFrame([{feature: values[feature] for feature in FEATURES}], columns=list(FEATURES))
