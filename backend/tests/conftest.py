@@ -32,7 +32,7 @@ def client(tmp_path: Path) -> TestClient:
         ],
         columns=list(FEATURES),
     )
-    pipeline = Pipeline([("preprocessor", build_preprocessor(scale_numeric=True)), ("estimator", LogisticRegression(max_iter=1000, random_state=2026))])
+    pipeline = Pipeline([("preprocessor", build_preprocessor(scale=True)), ("estimator", LogisticRegression(max_iter=1000, random_state=2026))])
     pipeline.fit(training_features, [0, 1, 0, 1])
     joblib.dump({"pipeline": pipeline, "metadata": {"name": "test-logistic", "version": "test-v1", "feature_schema": list(FEATURES), "schema_version": SCHEMA_VERSION, "probability_calibrated": False}}, artifact_path)
     settings = Settings(app_env="test", database_url=f"sqlite:///{(tmp_path / 'test.db').as_posix()}", model_artifact_path=artifact_path, cors_origins=["http://localhost:5173"])

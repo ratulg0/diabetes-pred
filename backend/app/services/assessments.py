@@ -59,25 +59,6 @@ def assessment_to_record(assessment: Assessment) -> AssessmentRecord:
         stored_input = json.loads(assessment.input_json) if assessment.input_json else None
     except (TypeError, json.JSONDecodeError):
         stored_input = None
-    # Convert canonical dataset column names to the API's snake_case input names
-    # so history, dashboard tables, and CSV export use the same shape as the form.
-    if isinstance(stored_input, dict) and "Age" in stored_input:
-        stored_input = {
-            "gender": stored_input.get("Gender"),
-            "age": stored_input.get("Age"),
-            "physical_activity": stored_input.get("Physical Activity"),
-            "smoking_status": stored_input.get("Smoking Status"),
-            "alcohol_intake": stored_input.get("Alcohol Intake"),
-            "glucose": stored_input.get("Glucose"),
-            "blood_pressure": stored_input.get("Blood Pressure"),
-            "skin_thickness": stored_input.get("Skin Thickness"),
-            "insulin": stored_input.get("Insulin"),
-            "bmi": stored_input.get("BMI"),
-            "cholesterol": stored_input.get("Cholesterol"),
-            "diabetes_pedigree_function": stored_input.get("Diabetes Pedigree Function"),
-            "family_history": stored_input.get("Family History"),
-            "hypertension": stored_input.get("Hypertension"),
-        }
     # Older records are returned with their original legacy fields instead of being
     # silently represented as if they were entered using the replacement dataset.
     if stored_input is None:

@@ -6,7 +6,6 @@ import type {
   AssessmentPage,
   AssessmentRecord,
   DashboardSummary,
-  DatasetDistribution,
   LifestyleAssessmentInput,
   LifestyleAssessmentPage,
   LifestyleAssessmentRecord,
@@ -19,8 +18,6 @@ const API_PREFIX = "/api/v1";
 export const glucocareApi = {
   getDashboard: () =>
     request<DashboardSummary>(`${API_PREFIX}/dashboard/summary`),
-  getDatasetDistribution: () =>
-    request<DatasetDistribution>(`${API_PREFIX}/dashboard/dataset-distribution`),
   getModelStatus: () => request<ModelStatus>(`${API_PREFIX}/models`),
   retrainAllModels: () =>
     request<ModelStatus>(`${API_PREFIX}/models/retrain-all`, { method: "POST" }, 300_000),

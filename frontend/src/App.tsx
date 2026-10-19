@@ -22,8 +22,6 @@ import {
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
   ResponsiveContainer,
   Tooltip,
@@ -74,11 +72,8 @@ const percent = (value: number | undefined | null) =>
     ? `${(value * 100).toFixed(1)}%`
     : "Not available";
 const MODEL_NAMES: Record<string, string> = {
-  logistic_regression: "Logistic Regression",
   random_forest: "Random Forest",
-  xgboost: "XGBoost",
-  hist_gradient_boosting: "HistGradientBoosting",
-  soft_voting_ensemble: "Four-model soft voting",
+  extra_trees: "Extra Trees",
 };
 const modelName = (name: string) => MODEL_NAMES[name] ?? name;
 const displayGlucose = (value: number | null | undefined, unit: Preferences["glucose_unit"]) =>
@@ -298,7 +293,6 @@ function Dashboard({
   preferences: Preferences;
 }) {
   const model = useApiResource(glucocareApi.getModelStatus, []);
-  const datasetDistribution = useApiResource(glucocareApi.getDatasetDistribution, []);
   const [retraining, setRetraining] = useState<string | null>(null);
   const [retrainMessage, setRetrainMessage] = useState("");
   const [retrainError, setRetrainError] = useState(false);
@@ -363,7 +357,7 @@ function Dashboard({
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card label="Saved assessments" value={String(summary.total_assessments)} />
         <Card label="Model class 1 outputs" value={percentage} />
-        <Card label="Expected features" value="14" />
+        <Card label="Expected features" value="8" />
         <ModelCard
           available={model.data?.available ?? false}
           metadata={model.data?.metadata ?? null}
@@ -378,34 +372,6 @@ function Dashboard({
         onRetrainAll={() => void retrainAll()}
       />
       <div className="mt-6 grid gap-5 lg:grid-cols-2">
-        <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
-          <h3 className="font-bold text-blue-950">Dataset outcome distribution</h3>
-          <p className="mt-1 text-xs text-slate-400">
-            Counts from the source CSV · Outcome column · {datasetDistribution.data?.row_count.toLocaleString() ?? "—"} rows
-          </p>
-          {datasetDistribution.loading && !datasetDistribution.data ? (
-            <p className="mt-5 text-sm text-slate-500">Loading dataset summary…</p>
-          ) : datasetDistribution.error && !datasetDistribution.data ? (
-            <p role="alert" className="mt-5 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
-              Dataset distribution is unavailable. {datasetDistribution.error}
-            </p>
-          ) : (
-            <div className="mt-5 h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={datasetDistribution.data?.counts ?? []} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
-                  <CartesianGrid stroke="#edf2fa" vertical={false} />
-                  <XAxis dataKey="label" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Bar dataKey="count" name="Rows" fill="#2563eb" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-          <p className="mt-2 text-xs leading-5 text-slate-400">
-            This chart summarizes dataset labels; it does not show patient-specific risk or establish clinical validity.
-          </p>
-        </div>
         <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
           <h3 className="font-bold text-blue-950">Illustrative glucose visualization</h3>
           <p className="mt-1 text-xs text-slate-400">Sample data only · not a live CGM feed</p>
@@ -424,7 +390,7 @@ function Dashboard({
         <div className="rounded-2xl border border-blue-100 bg-white p-6 shadow-soft">
           <h3 className="font-bold text-blue-950">Server-backed model output</h3>
           <p className="mt-3 text-sm leading-6 text-slate-500">
-            New assessments are validated, scored by the four-model soft-voting ensemble, and persisted once. Outputs are research estimates, not diagnoses.
+            New assessments are validated, inferred by the active saved pipeline, and persisted once. Outputs are calibrated model estimates, not diagnoses.
           </p>
           <NavLink to="/assessment" className="mt-5 inline-block rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white">
             New assessment
@@ -494,7 +460,7 @@ function BenchmarkTable({
   retrainError: boolean;
   onRetrainAll: () => void;
 }) {
-  const supportedModels = ["logistic_regression", "random_forest", "xgboost", "hist_gradient_boosting"];
+  const supportedModels = ["random_forest", "extra_trees"];
   const candidates = metadata?.candidate_results ?? [];
   return (
     <section className="mt-6 rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
@@ -502,7 +468,7 @@ function BenchmarkTable({
         <div>
           <h3 className="font-bold text-blue-950">Clinical model</h3>
           <p className="mt-1 max-w-2xl text-sm text-slate-500">
-            Logistic Regression, Random Forest, XGBoost, and HistGradientBoosting are trained together. Their predicted probabilities are averaged with equal weights for one final soft-voting decision.
+            Random Forest and Extra Trees are compared with stratified cross-validation. The candidate with the stronger mean ROC-AUC is selected, then evaluated on a held-out split.
           </p>
         </div>
         <button
@@ -511,7 +477,7 @@ function BenchmarkTable({
           onClick={onRetrainAll}
           className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {retraining ? "Training all 4 models…" : "Retrain all 4 models"}
+          {retraining ? "Training model…" : "Retrain clinical model"}
         </button>
       </div>
       {!available && (
@@ -531,7 +497,7 @@ function BenchmarkTable({
             <div key={name} className="rounded-xl border border-blue-100 bg-slate-50 p-4">
               <p className="font-semibold text-blue-950">{modelName(name)}</p>
               <p className="mt-2 text-xs text-slate-500">
-                {available && metadata?.members?.includes(name) ? "Included in active ensemble" : available && trained ? "Trained candidate" : "Awaiting training"}
+                {available && metadata?.name === name ? "Selected active model" : available && trained ? "Evaluated candidate" : "Awaiting training"}
               </p>
             </div>
           );
@@ -539,7 +505,12 @@ function BenchmarkTable({
       </div>
       {metadata?.selection_rule && (
         <p className="mt-4 text-xs leading-5 text-slate-500">
-          Ensemble rule: {metadata.selection_rule}
+          Selection rule: {metadata.selection_rule}
+        </p>
+      )}
+      {metadata?.test_metrics && (
+        <p className="mt-2 text-xs leading-5 text-slate-500">
+          Held-out accuracy: {percent(metadata.test_metrics.accuracy)} · ROC-AUC: {percent(metadata.test_metrics.roc_auc)} · PR-AUC: {percent(metadata.test_metrics.pr_auc)}
         </p>
       )}
       <p className="mt-3 text-xs leading-5 text-slate-500">

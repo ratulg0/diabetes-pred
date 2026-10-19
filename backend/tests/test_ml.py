@@ -33,4 +33,4 @@ def test_dataset_audit_confirms_replacement_schema(tmp_path: Path) -> None:
 
 
 def test_candidate_pipelines_use_supported_estimators() -> None:
-    assert set(candidate_pipelines()) == {"logistic_regression", "random_forest", "xgboost", "hist_gradient_boosting"}
+    assert set(candidate_pipelines()) == {"random_forest", "extra_trees"}
