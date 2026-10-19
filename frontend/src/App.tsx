@@ -500,7 +500,7 @@ function BenchmarkTable({
             <div key={name} className="rounded-xl border border-blue-100 bg-slate-50 p-4">
               <p className="font-semibold text-blue-950">{modelName(name)}</p>
               <p className="mt-2 text-xs text-slate-500">
-                {available && metadata?.name === name ? "Selected active model" : available && trained ? "Evaluated candidate" : "Awaiting training"}
+                {available && metadata?.members?.includes(name) ? "Included in active ensemble" : available && trained ? "Trained candidate" : "Awaiting training"}
               </p>
             </div>
           );
