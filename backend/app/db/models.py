@@ -25,6 +25,7 @@ class Assessment(Base):
     bmi: Mapped[float] = mapped_column(Float, nullable=False)
     diabetes_pedigree_function: Mapped[float] = mapped_column(Float, nullable=False)
     age: Mapped[int] = mapped_column(Integer, nullable=False)
+    input_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     result: Mapped["PredictionResult"] = relationship(back_populates="assessment", cascade="all, delete-orphan", uselist=False)
 
 

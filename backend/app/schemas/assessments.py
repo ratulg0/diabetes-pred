@@ -1,39 +1,53 @@
-# Request/response schemas for the assessments feature. AssessmentInput is the
-# validated patient feature vector; PredictionResponse is the model output
-# envelope; AssessmentRecord adds persistence fields on top.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.ml.schema import DISCLAIMER
 
 
 class AssessmentInput(BaseModel):
-    """Patient feature vector with per-field clinical bounds; extra fields rejected."""
+    """Input matching the replacement dataset's 14 feature columns."""
     model_config = ConfigDict(extra="forbid")
 
-    pregnancies: int = Field(ge=0, le=25)
-    glucose: float = Field(ge=0, le=400)
-    blood_pressure: float = Field(ge=0, le=250)
-    skin_thickness: float = Field(ge=0, le=150)
-    insulin: float = Field(ge=0, le=1000)
-    bmi: float = Field(gt=0, le=100)
-    diabetes_pedigree_function: float = Field(ge=0, le=5)
+    gender: str = Field(min_length=1, max_length=20)
     age: int = Field(ge=1, le=120)
+    physical_activity: str = Field(min_length=1, max_length=30)
+    smoking_status: str = Field(min_length=1, max_length=30)
+    alcohol_intake: str = Field(min_length=1, max_length=30)
+    glucose: float | None = Field(default=None, ge=0, le=600)
+    blood_pressure: float | None = Field(default=None, ge=0, le=300)
+    skin_thickness: float | None = Field(default=None, ge=0, le=150)
+    insulin: float | None = Field(default=None, ge=0, le=3000)
+    bmi: float | None = Field(default=None, ge=0, le=100)
+    cholesterol: float | None = Field(default=None, ge=0, le=1000)
+    diabetes_pedigree_function: float | None = Field(default=None, ge=0, le=10)
+    family_history: str = Field(min_length=1, max_length=20)
+    hypertension: str = Field(min_length=1, max_length=20)
 
-    def canonical_features(self) -> dict[str, float | int]:
-        """Map snake_case inputs to the dataset column names the model expects."""
+    @field_validator("gender", "physical_activity", "smoking_status", "alcohol_intake", "family_history", "hypertension")
+    @classmethod
+    def normalize_categories(cls, value: str) -> str:
+        return value.strip()
+
+    def canonical_features(self) -> dict[str, Any]:
         return {
-            "Pregnancies": self.pregnancies,
+            "Gender": self.gender,
+            "Age": self.age,
+            "Physical Activity": self.physical_activity,
+            "Smoking Status": self.smoking_status,
+            "Alcohol Intake": self.alcohol_intake,
             "Glucose": self.glucose,
-            "BloodPressure": self.blood_pressure,
-            "SkinThickness": self.skin_thickness,
+            "Blood Pressure": self.blood_pressure,
+            "Skin Thickness": self.skin_thickness,
             "Insulin": self.insulin,
             "BMI": self.bmi,
-            "DiabetesPedigreeFunction": self.diabetes_pedigree_function,
-            "Age": self.age,
+            "Cholesterol": self.cholesterol,
+            "Diabetes Pedigree Function": self.diabetes_pedigree_function,
+            "Family History": self.family_history,
+            "Hypertension": self.hypertension,
         }
 
 
@@ -43,7 +57,6 @@ class ModelIdentity(BaseModel):
 
 
 class PredictionResponse(BaseModel):
-    """Model output returned for both predict and saved-assessment endpoints."""
     prediction_id: str
     predicted_class: int = Field(ge=0, le=1)
     prediction_label: str
@@ -54,14 +67,12 @@ class PredictionResponse(BaseModel):
 
 
 class AssessmentRecord(PredictionResponse):
-    """Persisted assessment including timestamp, source, and original inputs."""
     created_at: datetime
     source: str
-    input: AssessmentInput
+    input: dict[str, Any]
 
 
 class AssessmentPage(BaseModel):
-    """Paginated list of assessment records with total count."""
     items: list[AssessmentRecord]
     page: int
     page_size: int

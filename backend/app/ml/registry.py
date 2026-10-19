@@ -11,7 +11,7 @@ from typing import Any
 import joblib
 import pandas as pd
 
-from app.ml.schema import FEATURES, MODEL_FEATURES
+from app.ml.schema import FEATURES
 
 
 class ModelUnavailableError(RuntimeError):
