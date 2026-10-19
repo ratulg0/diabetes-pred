@@ -32,6 +32,7 @@ import {
 import { ApiError } from "./api/client";
 import { glucocareApi } from "./api/glucocare";
 import type {
+  AssessmentInput,
   AssessmentPage,
   AssessmentRecord,
   DashboardSummary,
