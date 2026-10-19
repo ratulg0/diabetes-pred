@@ -460,20 +460,15 @@ function BenchmarkTable({
   retrainError: boolean;
   onRetrainAll: () => void;
 }) {
-  const supportedModels = [
-    "logistic_regression",
-    "random_forest",
-    "xgboost",
-    "hist_gradient_boosting",
-  ];
+  const supportedModels = ["random_forest", "extra_trees"];
   const candidates = metadata?.candidate_results ?? [];
   return (
     <section className="mt-6 rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-bold text-blue-950">Ensemble model</h3>
+          <h3 className="font-bold text-blue-950">Clinical model</h3>
           <p className="mt-1 max-w-2xl text-sm text-slate-500">
-            All four algorithms contribute to one final decision by averaging their estimated positive-class probabilities. There is no single-model selection.
+            Random Forest and Extra Trees are compared with stratified cross-validation. The candidate with the stronger mean ROC-AUC is selected, then evaluated on a held-out split.
           </p>
         </div>
         <button
@@ -482,12 +477,12 @@ function BenchmarkTable({
           onClick={onRetrainAll}
           className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {retraining ? "Training all models…" : "Train all models"}
+          {retraining ? "Training model…" : "Retrain clinical model"}
         </button>
       </div>
       {!available && (
         <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
-          The ensemble is not ready yet. Train all models to create it.
+          The clinical model is not ready. Confirm that data/raw/Diabetes Dataset.csv is present, then retrain the model.
         </p>
       )}
       {retrainMessage && (
@@ -502,15 +497,20 @@ function BenchmarkTable({
             <div key={name} className="rounded-xl border border-blue-100 bg-slate-50 p-4">
               <p className="font-semibold text-blue-950">{modelName(name)}</p>
               <p className="mt-2 text-xs text-slate-500">
-                {available && trained ? "Ensemble member" : "Awaiting training"}
+                {available && metadata?.name === name ? "Selected active model" : available && trained ? "Evaluated candidate" : "Awaiting training"}
               </p>
             </div>
           );
         })}
       </div>
-      {metadata?.ensemble_rule && (
+      {metadata?.selection_rule && (
         <p className="mt-4 text-xs leading-5 text-slate-500">
-          Decision rule: average all four model probabilities; values at or above 50% produce a likely YES result, otherwise likely NO. The probability is a model estimate, not a clinical risk assessment.
+          Selection rule: {metadata.selection_rule}
+        </p>
+      )}
+      {metadata?.test_metrics && (
+        <p className="mt-2 text-xs leading-5 text-slate-500">
+          Held-out accuracy: {percent(metadata.test_metrics.accuracy)} · ROC-AUC: {percent(metadata.test_metrics.roc_auc)} · PR-AUC: {percent(metadata.test_metrics.pr_auc)}
         </p>
       )}
       <p className="mt-3 text-xs leading-5 text-slate-500">
