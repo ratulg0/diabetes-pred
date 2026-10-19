@@ -65,7 +65,11 @@ const displayDate = (date: string) =>
   new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
     new Date(date),
   );
-const classLabel = (record: AssessmentRecord) => record.prediction_label;
+const classLabel = (record: AssessmentRecord) =>
+  record.prediction_label ||
+  (record.predicted_class === 1
+    ? "Likely YES for diabetes (model estimate)"
+    : "Likely NO for diabetes (model estimate)");
 const percent = (value: number | undefined | null) =>
   typeof value === "number" && Number.isFinite(value)
     ? `${(value * 100).toFixed(1)}%`
@@ -646,7 +650,11 @@ function Assessment({
             <div className="mt-4 rounded-xl bg-blue-50 p-3">
               <p className="text-xs text-blue-700">Selected model test accuracy</p>
               <p className="mt-1 text-xl font-extrabold text-blue-950">{percent(result.model_accuracy)}</p>
-              <p className="mt-1 text-xs text-blue-700">Measured on a held-out dataset; not confidence in this individual result.</p>
+              {result.model_accuracy === null || result.model_accuracy === undefined ? (
+                <p className="mt-1 text-xs text-amber-800">Accuracy is missing from this saved model. Retrain the model and restart the backend.</p>
+              ) : (
+                <p className="mt-1 text-xs text-blue-700">Measured on a held-out dataset; not confidence in this individual result.</p>
+              )}
             </div>
             <p className="mt-3 text-xs text-slate-500">
               Model: {modelName(result.model.name)} · {result.model.version}
