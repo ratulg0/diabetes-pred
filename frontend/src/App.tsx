@@ -465,9 +465,7 @@ function BenchmarkTable({
     "xgboost",
     "hist_gradient_boosting",
   ];
-  const candidateByName = new Map(
-    (metadata?.candidate_results ?? []).map((candidate) => [candidate.name, candidate]),
-  );
+  const candidates = metadata?.candidate_results ?? [];
   return (
     <section className="mt-6 rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -503,7 +501,7 @@ function BenchmarkTable({
           </thead>
           <tbody>
             {supportedModels.map((name) => {
-              const candidate = candidateByName.get(name);
+              const candidate = candidates.find((item) => item.name === name);
               const selected = name === metadata?.name;
               const isRetraining = retraining === name;
               return (
