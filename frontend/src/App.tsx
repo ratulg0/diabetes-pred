@@ -293,16 +293,16 @@ function Dashboard({
   const [retrainMessage, setRetrainMessage] = useState("");
   const [retrainError, setRetrainError] = useState(false);
 
-  async function retrain(modelName: string) {
-    setRetraining(modelName);
-    setRetrainMessage(`Retraining ${modelName(modelName)}. This may take a few minutes…`);
+  async function retrain(modelKey: string) {
+    setRetraining(modelKey);
+    setRetrainMessage(`Retraining ${modelName(modelKey)}. This may take a few minutes…`);
     setRetrainError(false);
     try {
-      const response = await glucocareApi.retrainModel(modelName);
+      const response = await glucocareApi.retrainModel(modelKey);
       await model.refresh();
       setRetrainMessage(
         response.available
-          ? `${modelName === response.metadata?.name ? "Model retrained and activated" : "Model retrained"}: ${modelName(response.metadata?.name ?? modelName)}.`
+          ? `${modelKey === response.metadata?.name ? "Model retrained and activated" : "Model retrained"}: ${modelName(response.metadata?.name ?? modelKey)}.`
           : "Retraining finished, but the API did not report a ready model.",
       );
       setRetrainError(!response.available);
