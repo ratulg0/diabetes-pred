@@ -26,7 +26,7 @@ pip install -r requirements.txt
 python -m training.train_clinical_model
 ```
 
-Training audits the schema, performs stratified cross-validation to select between Random Forest and Extra Trees, evaluates the selected model on a held-out split, and writes the active artifact to `models/active-model.joblib`. In development, the API also attempts training at startup. The model status endpoint is `GET /api/v1/models`; the retraining endpoint is `POST /api/v1/models/retrain-all`.
+Training audits the schema, cross-validates Logistic Regression, Random Forest, XGBoost, and HistGradientBoosting, then fits an equal-weight soft-voting ensemble and writes it to `models/active-model.joblib`. The final class is based on the average of the four predicted probabilities (threshold 0.5). In development, the API also attempts training at startup. The model status endpoint is `GET /api/v1/models`; the retraining endpoint is `POST /api/v1/models/retrain-all`.
 
 ## Assessment flow
 
