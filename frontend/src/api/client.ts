@@ -22,11 +22,12 @@ export class ApiError extends Error {
 export async function request<T>(
   path: string,
   init: RequestInit = {},
+  timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<T> {
   const controller = new AbortController();
   const timeout = window.setTimeout(
     () => controller.abort(),
-    DEFAULT_TIMEOUT_MS,
+    timeoutMs,
   );
   try {
     const response = await fetch(`${API_BASE_URL}${path}`, {
