@@ -73,3 +73,55 @@ class UserPreference(Base):
 # Indexes to speed up common dashboard and history queries.
 Index("ix_assessments_created_at", Assessment.created_at)
 Index("ix_prediction_results_predicted_class", PredictionResult.predicted_class)
+
+
+class LifestyleAssessment(Base):
+    """Persisted CDC lifestyle survey assessment with 21 indicator features."""
+    __tablename__ = "lifestyle_assessments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    source: Mapped[str] = mapped_column(String(64), nullable=False, default="lifestyle_assessment")
+    schema_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    high_bp: Mapped[int] = mapped_column(Integer, nullable=False)
+    high_chol: Mapped[int] = mapped_column(Integer, nullable=False)
+    chol_check: Mapped[int] = mapped_column(Integer, nullable=False)
+    bmi: Mapped[float] = mapped_column(Float, nullable=False)
+    smoker: Mapped[int] = mapped_column(Integer, nullable=False)
+    stroke: Mapped[int] = mapped_column(Integer, nullable=False)
+    heart_disease_or_attack: Mapped[int] = mapped_column(Integer, nullable=False)
+    phys_activity: Mapped[int] = mapped_column(Integer, nullable=False)
+    fruits: Mapped[int] = mapped_column(Integer, nullable=False)
+    veggies: Mapped[int] = mapped_column(Integer, nullable=False)
+    hvy_alcohol_consump: Mapped[int] = mapped_column(Integer, nullable=False)
+    any_healthcare: Mapped[int] = mapped_column(Integer, nullable=False)
+    no_docbc_cost: Mapped[int] = mapped_column(Integer, nullable=False)
+    gen_hlth: Mapped[int] = mapped_column(Integer, nullable=False)
+    ment_hlth: Mapped[int] = mapped_column(Integer, nullable=False)
+    phys_hlth: Mapped[int] = mapped_column(Integer, nullable=False)
+    diff_walk: Mapped[int] = mapped_column(Integer, nullable=False)
+    sex: Mapped[int] = mapped_column(Integer, nullable=False)
+    age: Mapped[int] = mapped_column(Integer, nullable=False)
+    education: Mapped[int] = mapped_column(Integer, nullable=False)
+    income: Mapped[int] = mapped_column(Integer, nullable=False)
+    result: Mapped["LifestylePredictionResult"] = relationship(back_populates="assessment", cascade="all, delete-orphan", uselist=False)
+
+
+class LifestylePredictionResult(Base):
+    """Prediction result linked to a lifestyle assessment."""
+    __tablename__ = "lifestyle_prediction_results"
+    __table_args__ = (UniqueConstraint("assessment_id", name="uq_lifestyle_prediction_results_assessment_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    assessment_id: Mapped[str] = mapped_column(ForeignKey("lifestyle_assessments.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    predicted_class: Mapped[int] = mapped_column(Integer, nullable=False)
+    probability: Mapped[float | None] = mapped_column(Float, nullable=True)
+    model_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    model_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    response_metadata: Mapped[str | None] = mapped_column(Text, nullable=True)
+    assessment: Mapped["LifestyleAssessment"] = relationship(back_populates="result")
+
+
+Index("ix_lifestyle_assessments_created_at", LifestyleAssessment.created_at)
+Index("ix_lifestyle_prediction_results_predicted_class", LifestylePredictionResult.predicted_class)

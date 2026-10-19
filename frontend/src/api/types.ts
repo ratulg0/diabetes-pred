@@ -46,6 +46,51 @@ export type AssessmentRecord = {
   input: AssessmentInput;
 };
 
+export type LifestyleAssessmentInput = {
+  high_bp: number;
+  high_chol: number;
+  chol_check: number;
+  bmi: number;
+  smoker: number;
+  stroke: number;
+  heart_disease_or_attack: number;
+  phys_activity: number;
+  fruits: number;
+  veggies: number;
+  hvy_alcohol_consump: number;
+  any_healthcare: number;
+  no_docbc_cost: number;
+  gen_hlth: number;
+  ment_hlth: number;
+  phys_hlth: number;
+  diff_walk: number;
+  sex: number;
+  age: number;
+  education: number;
+  income: number;
+};
+
+export type LifestyleAssessmentRecord = {
+  prediction_id: string;
+  predicted_class: 0 | 1;
+  prediction_label: string;
+  probability: number | null;
+  model_accuracy: number | null;
+  model: ModelIdentity;
+  target_definition: string;
+  disclaimer: string;
+  created_at: string;
+  source: string;
+  input: LifestyleAssessmentInput;
+};
+
+export type LifestyleAssessmentPage = {
+  items: LifestyleAssessmentRecord[];
+  page: number;
+  page_size: number;
+  total_count: number;
+};
+
 export type AssessmentPage = {
   items: AssessmentRecord[];
   page: number;

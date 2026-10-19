@@ -43,7 +43,7 @@ from app.ml.schema import (
 
 RANDOM_SEED = 2026
 CV_FOLDS = 5
-OPTUNA_TRIALS = 20
+OPTUNA_TRIALS = 3
 VAL_FRACTION = 0.2
 
 
@@ -62,10 +62,8 @@ def candidate_param_space(trial: optuna.Trial, model_name: str) -> dict[str, Any
     # Suggest hyperparameters for one candidate model within a bounded search
     # space tuned for the small Pima dataset.
     if model_name == "logistic_regression":
-        penalty = trial.suggest_categorical("penalty", ["l1", "l2"])
-        solver = "liblinear" if penalty == "l1" else trial.suggest_categorical(
-            "solver", ["lbfgs", "liblinear", "saga"]
-        )
+        penalty = trial.suggest_categorical("penalty", ["l1", "l2", None])
+        solver = trial.suggest_categorical("solver", ["lbfgs", "liblinear", "saga"])
         return {
             "C": trial.suggest_float("C", 1e-4, 1e2, log=True),
             "penalty": penalty,

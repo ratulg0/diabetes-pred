@@ -6,6 +6,9 @@ import type {
   AssessmentPage,
   AssessmentRecord,
   DashboardSummary,
+  LifestyleAssessmentInput,
+  LifestyleAssessmentPage,
+  LifestyleAssessmentRecord,
   ModelStatus,
   Preferences,
 } from "./types";
@@ -46,4 +49,24 @@ export const glucocareApi = {
       method: "PUT",
       body: JSON.stringify(preferences),
     }),
+  // Lifestyle assessment endpoints (CDC survey model).
+  saveLifestyle: (input: LifestyleAssessmentInput) =>
+    request<LifestyleAssessmentRecord>(`${API_PREFIX}/lifestyle-assessments/save`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  getLifestyleHistory: (params: {
+    page: number;
+    pageSize: number;
+    predictedClass: "" | "0" | "1";
+  }) => {
+    const search = new URLSearchParams({
+      page: String(params.page),
+      page_size: String(params.pageSize),
+    });
+    if (params.predictedClass) search.set("predicted_class", params.predictedClass);
+    return request<LifestyleAssessmentPage>(
+      `${API_PREFIX}/lifestyle-assessments/history?${search.toString()}`,
+    );
+  },
 };
