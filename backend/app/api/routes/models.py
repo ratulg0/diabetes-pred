@@ -1,5 +1,4 @@
-# Model status and retrain-all routes. Exposes artifact availability and
-# triggers full benchmark retraining into the soft-voting ensemble.
+# Model status and retraining routes for the active replacement-dataset classifier.
 from __future__ import annotations
 
 import asyncio
@@ -34,7 +33,7 @@ async def retrain_all_models(
     request: Request,
     model_registry: ModelRegistry = Depends(get_model_registry),
 ) -> ModelStatusResponse:
-    """Retrain all four candidates and activate their soft-voting ensemble."""
+    """Re-evaluate the supported candidates and activate the best replacement-dataset model."""
     # Guard against concurrent retraining jobs.
     if not _retraining_lock.acquire(blocking=False):
         raise HTTPException(
@@ -50,7 +49,7 @@ async def retrain_all_models(
             None,
         )
         model_registry.reload()
-        logger.info("ensemble_retrained version=%s members=%s", metadata["version"], metadata["members"])
+        logger.info("clinical_model_retrained version=%s selected=%s", metadata["version"], metadata["name"])
         return ModelStatusResponse(available=True, metadata=metadata)
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
