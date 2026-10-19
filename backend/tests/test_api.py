@@ -32,6 +32,12 @@ def test_persist_list_and_dashboard(client: TestClient) -> None:
     record = created.json()
     assert record["prediction_id"] != "not-persisted"
     assert record["probability"] is None
+    assert record["prediction_label"] == (
+        "Likely YES for diabetes (model estimate)"
+        if record["predicted_class"] == 1
+        else "Likely NO for diabetes (model estimate)"
+    )
+    assert record["model_accuracy"] is None
     assert "not a diagnosis" in record["disclaimer"].lower()
 
     history = client.get("/api/v1/assessments?page_size=10").json()
