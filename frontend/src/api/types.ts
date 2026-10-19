@@ -6,7 +6,7 @@ export type AssessmentInput = {
   age: number;
   physical_activity: string;
   smoking_status: string;
-  alcohol_intake: string;
+  alcohol_intake: string | null;
   glucose: number | null;
   blood_pressure: number | null;
   skin_thickness: number | null;
