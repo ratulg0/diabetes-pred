@@ -66,6 +66,10 @@ const classLabel = (record: AssessmentRecord) =>
   (record.predicted_class === 1
     ? "Likely YES for diabetes (model estimate)"
     : "Likely NO for diabetes (model estimate)");
+const percent = (value: number | undefined | null) =>
+  typeof value === "number" && Number.isFinite(value)
+    ? `${(value * 100).toFixed(1)}%`
+    : "Not available";
 const MODEL_NAMES: Record<string, string> = {
   random_forest: "Random Forest",
   extra_trees: "Extra Trees",
