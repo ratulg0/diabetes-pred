@@ -16,7 +16,7 @@ class AssessmentInput(BaseModel):
     age: int = Field(ge=1, le=120)
     physical_activity: str = Field(min_length=1, max_length=30)
     smoking_status: str = Field(min_length=1, max_length=30)
-    alcohol_intake: str = Field(min_length=1, max_length=30)
+    alcohol_intake: str | None = Field(default=None, min_length=1, max_length=30)
     glucose: float | None = Field(default=None, ge=0, le=600)
     blood_pressure: float | None = Field(default=None, ge=0, le=300)
     skin_thickness: float | None = Field(default=None, ge=0, le=150)
@@ -29,8 +29,8 @@ class AssessmentInput(BaseModel):
 
     @field_validator("gender", "physical_activity", "smoking_status", "alcohol_intake", "family_history", "hypertension")
     @classmethod
-    def normalize_categories(cls, value: str) -> str:
-        return value.strip()
+    def normalize_categories(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
 
     def canonical_features(self) -> dict[str, Any]:
         return {
