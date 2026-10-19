@@ -14,6 +14,8 @@ export const glucocareApi = {
   getDashboard: () =>
     request<DashboardSummary>(`${API_PREFIX}/dashboard/summary`),
   getModelStatus: () => request<ModelStatus>(`${API_PREFIX}/models`),
+  retrainModel: (modelName: string) =>
+    request<ModelStatus>(`${API_PREFIX}/models/retrain/${modelName}`, { method: "POST" }, 180_000),
   createAssessment: (input: AssessmentInput) =>
     request<AssessmentRecord>(`${API_PREFIX}/assessments`, {
       method: "POST",
