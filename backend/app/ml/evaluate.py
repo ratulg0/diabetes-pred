@@ -7,6 +7,7 @@ from sklearn.metrics import (
     average_precision_score,
     brier_score_loss,
     confusion_matrix,
+    accuracy_score,
     f1_score,
     precision_score,
     recall_score,
@@ -19,6 +20,7 @@ def evaluate_binary_classifier(y_true: Any, probabilities: np.ndarray, threshold
     true_negative, false_positive, false_negative, true_positive = confusion_matrix(y_true, predicted, labels=[0, 1]).ravel()
     specificity = true_negative / (true_negative + false_positive) if true_negative + false_positive else 0.0
     return {
+        "accuracy": round(float(accuracy_score(y_true, predicted)), 6),
         "roc_auc": round(float(roc_auc_score(y_true, probabilities)), 6),
         "pr_auc": round(float(average_precision_score(y_true, probabilities)), 6),
         "precision": round(float(precision_score(y_true, predicted, zero_division=0)), 6),
