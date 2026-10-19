@@ -17,6 +17,7 @@ class AssessmentRepository:
         inputs: AssessmentInput,
         predicted_class: int,
         probability: float | None,
+        model_accuracy: float | None,
         model_name: str,
         model_version: str,
     ) -> Assessment:
@@ -27,7 +28,7 @@ class AssessmentRepository:
             probability=probability,
             model_name=model_name,
             model_version=model_version,
-            response_metadata=json.dumps({"probability_calibrated": probability is not None}),
+            response_metadata=json.dumps({"probability_calibrated": probability is not None, "model_accuracy": model_accuracy}),
         )
         assessment.result = result
         try:
