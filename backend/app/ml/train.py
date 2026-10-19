@@ -140,3 +140,88 @@ def _file_sha256(path: Path) -> str:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def retrain_candidate(
+    dataset_path: Path,
+    artifact_path: Path,
+    model_name: str,
+    version: str | None = None,
+    previous_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Retrain one supported candidate and make it the active inference artifact."""
+    pipelines = candidate_pipelines()
+    if model_name not in pipelines:
+        raise ValueError(f"Unsupported model name: {model_name}")
+
+    audit = audit_dataset(dataset_path)
+    if not audit.schema_matches_expected:
+        raise ValueError("Dataset schema does not exactly match the required tabular classification schema.")
+    frame = pd.read_csv(dataset_path)
+    features = frame.loc[:, list(FEATURES)]
+    target = frame[TARGET]
+    if set(target.unique()) - {0, 1}:
+        raise ValueError("Outcome must contain only binary values 0 and 1.")
+    train_features, test_features, train_target, test_target = train_test_split(
+        features, target, test_size=0.2, stratify=target, random_state=RANDOM_SEED
+    )
+    cv = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_SEED)
+    scores = cross_validate(
+        pipelines[model_name],
+        train_features,
+        train_target,
+        cv=cv,
+        scoring={"accuracy": "accuracy", "roc_auc": "roc_auc", "brier": "neg_brier_score"},
+        n_jobs=1,
+        return_train_score=False,
+    )
+    candidate = CandidateResult(
+        name=model_name,
+        cv_accuracy_mean=round(float(np.mean(scores["test_accuracy"])), 6),
+        cv_accuracy_std=round(float(np.std(scores["test_accuracy"], ddof=1)), 6),
+        cv_roc_auc_mean=round(float(np.mean(scores["test_roc_auc"])), 6),
+        cv_roc_auc_std=round(float(np.std(scores["test_roc_auc"], ddof=1)), 6),
+        cv_brier_mean=round(float(-np.mean(scores["test_brier"])), 6),
+        cv_brier_std=round(float(np.std(-scores["test_brier"], ddof=1)), 6),
+    )
+    selected_pipeline = pipelines[model_name]
+    pipeline = CalibratedClassifierCV(estimator=selected_pipeline, method="sigmoid", cv=CV_FOLDS)
+    pipeline.fit(train_features, train_target)
+    test_probabilities = pipeline.predict_proba(test_features)[:, 1]
+    test_metrics = evaluate_binary_classifier(test_target, test_probabilities)
+
+    previous_candidates = (previous_metadata or {}).get("candidate_results", [])
+    candidates_by_name = {
+        item["name"]: item for item in previous_candidates
+        if isinstance(item, dict) and isinstance(item.get("name"), str)
+    }
+    candidates_by_name[model_name] = asdict(candidate)
+    generated_version = version or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    metadata: dict[str, Any] = {
+        "name": model_name,
+        "version": generated_version,
+        "algorithm": type(selected_pipeline.named_steps["estimator"]).__name__,
+        "feature_schema": list(FEATURES),
+        "schema_version": SCHEMA_VERSION,
+        "dataset_sha256": dataset_sha256(dataset_path),
+        "dataset_file_name": dataset_path.name,
+        "audit": audit.to_dict(),
+        "candidate_results": [candidates_by_name[key] for key in sorted(candidates_by_name)],
+        "selection_rule": "Manually retrained model selected by the user; its metrics are evaluated on the same deterministic held-out split.",
+        "test_metrics": test_metrics,
+        "split": {"random_seed": RANDOM_SEED, "test_fraction": 0.2, "test_rows": int(len(test_target)), "training_rows": int(len(train_target)), "cv_folds": CV_FOLDS},
+        "preprocessing": "Replace candidate-missing zero values only for Glucose, BloodPressure, SkinThickness, Insulin, and BMI; median impute inside each fold; standardize only logistic regression.",
+        "probability_calibrated": True,
+        "calibration": {"method": "sigmoid", "cv_folds": CV_FOLDS, "scope": "training partition only"},
+        "trained_at_utc": datetime.now(UTC).isoformat(),
+        "dependency_versions": {"python": platform.python_version(), "scikit_learn": sklearn.__version__, "xgboost": xgboost.__version__},
+    }
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = artifact_path.with_suffix(".tmp")
+    joblib.dump({"pipeline": pipeline, "metadata": metadata}, temporary_path)
+    temporary_path.replace(artifact_path)
+    metadata["artifact_sha256"] = _file_sha256(artifact_path)
+    artifact_path.with_suffix(".metadata.json").write_text(
+        json.dumps(metadata, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    return metadata
