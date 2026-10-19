@@ -72,8 +72,11 @@ const percent = (value: number | undefined | null) =>
     ? `${(value * 100).toFixed(1)}%`
     : "Not available";
 const MODEL_NAMES: Record<string, string> = {
+  logistic_regression: "Logistic Regression",
   random_forest: "Random Forest",
-  extra_trees: "Extra Trees",
+  xgboost: "XGBoost",
+  hist_gradient_boosting: "HistGradientBoosting",
+  soft_voting_ensemble: "Four-model soft voting",
 };
 const modelName = (name: string) => MODEL_NAMES[name] ?? name;
 const displayGlucose = (value: number | null | undefined, unit: Preferences["glucose_unit"]) =>
@@ -357,7 +360,7 @@ function Dashboard({
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card label="Saved assessments" value={String(summary.total_assessments)} />
         <Card label="Model class 1 outputs" value={percentage} />
-        <Card label="Expected features" value="8" />
+        <Card label="Expected features" value="14" />
         <ModelCard
           available={model.data?.available ?? false}
           metadata={model.data?.metadata ?? null}
@@ -390,7 +393,7 @@ function Dashboard({
         <div className="rounded-2xl border border-blue-100 bg-white p-6 shadow-soft">
           <h3 className="font-bold text-blue-950">Server-backed model output</h3>
           <p className="mt-3 text-sm leading-6 text-slate-500">
-            New assessments are validated, inferred by the active saved pipeline, and persisted once. Outputs are calibrated model estimates, not diagnoses.
+            New assessments are validated, scored by the four-model soft-voting ensemble, and persisted once. Outputs are research estimates, not diagnoses.
           </p>
           <NavLink to="/assessment" className="mt-5 inline-block rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white">
             New assessment
@@ -460,7 +463,7 @@ function BenchmarkTable({
   retrainError: boolean;
   onRetrainAll: () => void;
 }) {
-  const supportedModels = ["random_forest", "extra_trees"];
+  const supportedModels = ["logistic_regression", "random_forest", "xgboost", "hist_gradient_boosting"];
   const candidates = metadata?.candidate_results ?? [];
   return (
     <section className="mt-6 rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
@@ -468,7 +471,7 @@ function BenchmarkTable({
         <div>
           <h3 className="font-bold text-blue-950">Clinical model</h3>
           <p className="mt-1 max-w-2xl text-sm text-slate-500">
-            Random Forest and Extra Trees are compared with stratified cross-validation. The candidate with the stronger mean ROC-AUC is selected, then evaluated on a held-out split.
+            Logistic Regression, Random Forest, XGBoost, and HistGradientBoosting are trained together. Their predicted probabilities are averaged with equal weights for one final soft-voting decision.
           </p>
         </div>
         <button
@@ -477,7 +480,7 @@ function BenchmarkTable({
           onClick={onRetrainAll}
           className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {retraining ? "Training model…" : "Retrain clinical model"}
+          {retraining ? "Training all 4 models…" : "Retrain all 4 models"}
         </button>
       </div>
       {!available && (
@@ -505,12 +508,7 @@ function BenchmarkTable({
       </div>
       {metadata?.selection_rule && (
         <p className="mt-4 text-xs leading-5 text-slate-500">
-          Selection rule: {metadata.selection_rule}
-        </p>
-      )}
-      {metadata?.test_metrics && (
-        <p className="mt-2 text-xs leading-5 text-slate-500">
-          Held-out accuracy: {percent(metadata.test_metrics.accuracy)} · ROC-AUC: {percent(metadata.test_metrics.roc_auc)} · PR-AUC: {percent(metadata.test_metrics.pr_auc)}
+          Ensemble rule: {metadata.selection_rule}
         </p>
       )}
       <p className="mt-3 text-xs leading-5 text-slate-500">
