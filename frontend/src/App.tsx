@@ -40,6 +40,7 @@ import type {
   Preferences,
 } from "./api/types";
 import { useApiResource } from "./hooks/use-api-resource";
+import LifestyleAssessment from "./pages/LifestyleAssessment";
 
 // Form field schema: all eight Pima dataset features captured as strings during input, plus the empty default state.
 type FormValues = Record<keyof AssessmentInput, string>;
@@ -133,14 +134,16 @@ function Shell({ children }: { children: React.ReactNode }) {
     (
       {
         "/": "Overview",
-        "/assessment": "New assessment",
+        "/assessment": "Clinical lab assessment",
+        "/lifestyle-assessment": "Lifestyle & health assessment",
         "/history": "Assessment history",
         "/settings": "Preferences",
       } as Record<string, string>
     )[location.pathname] ?? "Overview";
   const links = [
     ["/", "Overview", LayoutDashboard],
-    ["/assessment", "New assessment", Activity],
+    ["/assessment", "Clinical assessment", Activity],
+    ["/lifestyle-assessment", "Lifestyle assessment", HeartPulse],
     ["/history", "Assessment history", ClipboardList],
     ["/settings", "Preferences", Settings],
   ] as const;
@@ -1025,6 +1028,10 @@ export default function App() {
               notifications={preferences.assessment_notifications}
             />
           }
+        />
+        <Route
+          path="/lifestyle-assessment"
+          element={<LifestyleAssessment />}
         />
         <Route
           path="/history"

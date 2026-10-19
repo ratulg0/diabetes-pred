@@ -13,3 +13,6 @@ optuna==4.4.0
 SQLAlchemy==2.1.5
 uvicorn==0.54.0
 xgboost==3.4.1
+
+# UCI ML Repository client for independent lifestyle model training.
+ucimlrepo==0.0.7
