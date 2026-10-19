@@ -72,11 +72,11 @@ class ModelRegistry:
         except ModelUnavailableError as error:
             return {"available": False, "reason": str(error)}
 
-    def predict_class(self, values: dict[str, float | int]) -> tuple[int, dict[str, Any]]:
+    def predict_class(self, values: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         predicted_class, _, metadata = self.predict(values)
         return predicted_class, metadata
 
-    def predict(self, values: dict[str, float | int]) -> tuple[int, float | None, dict[str, Any]]:
+    def predict(self, values: dict[str, Any]) -> tuple[int, float | None, dict[str, Any]]:
         # Run inference: build a feature frame, predict class and calibrated probability.
         loaded = self.load()
         frame = pd.DataFrame([{feature: values[feature] for feature in FEATURES}], columns=list(FEATURES))
