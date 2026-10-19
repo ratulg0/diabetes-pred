@@ -40,7 +40,9 @@ class ModelIdentity(BaseModel):
 class PredictionResponse(BaseModel):
     prediction_id: str
     predicted_class: int = Field(ge=0, le=1)
-    probability: float | None = None
+    prediction_label: str
+    probability: float | None = Field(default=None, ge=0, le=1)
+    model_accuracy: float | None = Field(default=None, ge=0, le=1)
     model: ModelIdentity
     disclaimer: str = DISCLAIMER
 
