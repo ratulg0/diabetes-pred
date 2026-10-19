@@ -2,11 +2,11 @@
 // model metadata, records, dashboard summary, preferences, and error body.
 // Request schema for the replacement 20,000-row clinical-assessment dataset.
 export type AssessmentInput = {
-  gender: string;
+  gender: "Female" | "Male";
   age: number;
-  physical_activity: string;
-  smoking_status: string;
-  alcohol_intake: string;
+  physical_activity: "Low" | "Moderate" | "High";
+  smoking_status: "Never" | "Former" | "Current";
+  alcohol_intake: "Occasional" | "Regular" | null;
   glucose: number | null;
   blood_pressure: number | null;
   skin_thickness: number | null;
@@ -14,8 +14,8 @@ export type AssessmentInput = {
   bmi: number | null;
   cholesterol: number | null;
   diabetes_pedigree_function: number | null;
-  family_history: string;
-  hypertension: string;
+  family_history: "No" | "Yes";
+  hypertension: "No" | "Yes";
 };
 
 export type ModelIdentity = { name: string; version: string };
@@ -23,11 +23,8 @@ export type ModelIdentity = { name: string; version: string };
 export type ModelCandidateResult = {
   name: string;
   cv_accuracy_mean: number;
-  cv_accuracy_std: number;
+  cv_f1_mean: number;
   cv_roc_auc_mean: number;
-  cv_roc_auc_std: number;
-  cv_brier_mean: number;
-  cv_brier_std: number;
 };
 
 export type ModelMetadata = {
@@ -35,9 +32,9 @@ export type ModelMetadata = {
   version?: string;
   algorithm?: string;
   members?: string[];
-  ensemble_rule?: string;
+  selection_rule?: string;
   candidate_results?: ModelCandidateResult[];
-  test_metrics?: { accuracy?: number; roc_auc?: number; pr_auc?: number };
+  test_metrics?: { accuracy?: number; roc_auc?: number; pr_auc?: number; f1?: number; sensitivity?: number; specificity?: number };
 };
 
 export type AssessmentRecord = {

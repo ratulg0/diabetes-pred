@@ -32,6 +32,7 @@ import {
 import { ApiError } from "./api/client";
 import { glucocareApi } from "./api/glucocare";
 import type {
+  AssessmentInput,
   AssessmentPage,
   AssessmentRecord,
   DashboardSummary,
@@ -71,11 +72,8 @@ const percent = (value: number | undefined | null) =>
     ? `${(value * 100).toFixed(1)}%`
     : "Not available";
 const MODEL_NAMES: Record<string, string> = {
-  logistic_regression: "Logistic Regression",
   random_forest: "Random Forest",
-  xgboost: "XGBoost",
-  hist_gradient_boosting: "HistGradientBoosting",
-  ensemble: "Four-model soft-voting ensemble",
+  extra_trees: "Extra Trees",
 };
 const modelName = (name: string) => MODEL_NAMES[name] ?? name;
 const displayGlucose = (value: number | null | undefined, unit: Preferences["glucose_unit"]) =>
@@ -462,20 +460,15 @@ function BenchmarkTable({
   retrainError: boolean;
   onRetrainAll: () => void;
 }) {
-  const supportedModels = [
-    "logistic_regression",
-    "random_forest",
-    "xgboost",
-    "hist_gradient_boosting",
-  ];
+  const supportedModels = ["random_forest", "extra_trees"];
   const candidates = metadata?.candidate_results ?? [];
   return (
     <section className="mt-6 rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-bold text-blue-950">Ensemble model</h3>
+          <h3 className="font-bold text-blue-950">Clinical model</h3>
           <p className="mt-1 max-w-2xl text-sm text-slate-500">
-            All four algorithms contribute to one final decision by averaging their estimated positive-class probabilities. There is no single-model selection.
+            Random Forest and Extra Trees are compared with stratified cross-validation. The candidate with the stronger mean ROC-AUC is selected, then evaluated on a held-out split.
           </p>
         </div>
         <button
@@ -484,12 +477,12 @@ function BenchmarkTable({
           onClick={onRetrainAll}
           className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {retraining ? "Training all models…" : "Train all models"}
+          {retraining ? "Training model…" : "Retrain clinical model"}
         </button>
       </div>
       {!available && (
         <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
-          The ensemble is not ready yet. Train all models to create it.
+          The clinical model is not ready. Confirm that data/raw/Diabetes Dataset.csv is present, then retrain the model.
         </p>
       )}
       {retrainMessage && (
@@ -504,15 +497,20 @@ function BenchmarkTable({
             <div key={name} className="rounded-xl border border-blue-100 bg-slate-50 p-4">
               <p className="font-semibold text-blue-950">{modelName(name)}</p>
               <p className="mt-2 text-xs text-slate-500">
-                {available && trained ? "Ensemble member" : "Awaiting training"}
+                {available && metadata?.name === name ? "Selected active model" : available && trained ? "Evaluated candidate" : "Awaiting training"}
               </p>
             </div>
           );
         })}
       </div>
-      {metadata?.ensemble_rule && (
+      {metadata?.selection_rule && (
         <p className="mt-4 text-xs leading-5 text-slate-500">
-          Decision rule: average all four model probabilities; values at or above 50% produce a likely YES result, otherwise likely NO. The probability is a model estimate, not a clinical risk assessment.
+          Selection rule: {metadata.selection_rule}
+        </p>
+      )}
+      {metadata?.test_metrics && (
+        <p className="mt-2 text-xs leading-5 text-slate-500">
+          Held-out accuracy: {percent(metadata.test_metrics.accuracy)} · ROC-AUC: {percent(metadata.test_metrics.roc_auc)} · PR-AUC: {percent(metadata.test_metrics.pr_auc)}
         </p>
       )}
       <p className="mt-3 text-xs leading-5 text-slate-500">
@@ -557,14 +555,14 @@ function Assessment({
     setError("");
     setResult(null);
     if (!values.age || !values.gender || !values.physical_activity || !values.smoking_status ||
-        !values.alcohol_intake || !values.family_history || !values.hypertension) {
+        !values.family_history || !values.hypertension) {
       setError("Complete the demographic and categorical fields. Numeric measurements may be left blank if unavailable.");
       return;
     }
     const numericKeys = ["age", "glucose", "blood_pressure", "skin_thickness", "insulin", "bmi", "cholesterol", "diabetes_pedigree_function"];
     const payload = Object.fromEntries(fields.map((field) => {
       const raw = values[field.key];
-      return [field.key, numericKeys.includes(field.key) ? (raw === undefined || raw === "" ? null : Number(raw)) : raw];
+      return [field.key, numericKeys.includes(field.key) ? (raw === undefined || raw === "" ? null : Number(raw)) : (field.key === "alcohol_intake" && !raw ? null : raw)];
     })) as AssessmentInput;
     setSaving(true);
     try {
@@ -598,9 +596,9 @@ function Assessment({
               <span>{field.label}</span>
               {"hint" in field && field.hint && <span className="mt-1 block text-xs font-normal text-slate-400">{field.hint}</span>}
               {field.kind === "select" ? (
-                <select required value={values[field.key] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [field.key]: e.target.value }))}
+                <select required={field.key !== "alcohol_intake"} value={values[field.key] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [field.key]: e.target.value }))}
                   className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                  <option value="" disabled>Select an answer</option>
+                  <option value="" disabled={field.key !== "alcohol_intake"}>{field.key === "alcohol_intake" ? "Not provided (optional)" : "Select an answer"}</option>
                   {field.options.map((option) => <option key={option} value={option}>{option}</option>)}
                 </select>
               ) : (
