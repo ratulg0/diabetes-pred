@@ -7,7 +7,7 @@ FastAPI backend for a **tabular diabetes-classification research prototype**. It
 - Versioned FastAPI REST endpoints under `/api/v1` with validation, CORS, request IDs and safe error responses.
 - Aggregated dataset audit for the repository's `diabetes.csv`; source data is not changed.
 - Leakage-safe benchmark pipelines for Logistic Regression, Random Forest, XGBoost and HistGradientBoosting.
-- Offline model selection using 5-fold stratified CV on the training split, then a single held-out test evaluation.
+- Five-fold stratified cross-validation for four calibrated candidate pipelines combined into one soft-voting ensemble; held-out evaluation is recorded in artifact metadata.
 - Versioned joblib package containing preprocessing plus estimator, accompanied by a JSON metadata/checksum sidecar.
 - SQLAlchemy models and an Alembic initial migration designed for SQL Server; SQLite is supported only for isolated local tests.
 - Transactional assessment/result persistence, history, dashboard, model-status, per-model retraining and local-demo preferences endpoints.
@@ -66,7 +66,7 @@ You can still run a full benchmark manually from the backend:
 python -m training.compare_models
 ```
 
-This writes ignored artifacts under `../models/`. It evaluates all four candidates, selects the candidate with the best training-CV ROC-AUC (ties use lower Brier score), then evaluates the selected candidate once on the held-out test data. The API runs this same training pipeline automatically on each startup outside the test environment. Startup can take a while because cross-validation is performed before the API becomes ready. The metadata JSON records results; do not present those results as clinical validation.
+This writes ignored artifacts under `../models/`. It trains all four candidates, calibrates them on the training partition, and combines their probabilities with equal-weight soft voting. The API runs this same training pipeline automatically on each startup outside the test environment. Startup can take a while because cross-validation is performed before the API becomes ready. The metadata JSON records results; do not present those results as clinical validation.
 
 ## API
 
@@ -80,10 +80,10 @@ This writes ignored artifacts under `../models/`. It evaluates all four candidat
 | GET/DELETE | `/api/v1/assessments/{id}` | Delete defaults to disabled |
 | GET | `/api/v1/dashboard/summary` | Database-backed counts and five recent records |
 | GET | `/api/v1/models` | Artifact availability and metadata |
-| POST | `/api/v1/models/retrain/{model_name}` | Retrain one supported algorithm and make it active (`logistic_regression`, `random_forest`, `xgboost`, or `hist_gradient_boosting`) |
+| POST | `/api/v1/models/retrain-all` | Retrain all four algorithms and rebuild the active soft-voting ensemble |
 | GET/PUT | `/api/v1/preferences` | Local-development display preferences only |
 
-Predictions return a human-readable likely YES/NO model result, a calibrated estimated probability when available, and the selected model's held-out test accuracy. The model-status endpoint exposes cross-validation accuracy, ROC-AUC and Brier score for all four benchmark candidates. On startup, all four candidates are benchmarked and the selected winner is activated for inference. The home-page retraining buttons retrain one chosen candidate and activate it for subsequent assessments. The active model's held-out test metrics are shown; the other candidates retain their latest available cross-validation metrics until retrained. These research metrics are not clinical validation. Every prediction includes the research-prototype disclaimer.
+Predictions return a human-readable likely YES/NO model result, a calibrated estimated probability when available, and the selected model's held-out test accuracy. The model-status endpoint exposes candidate metadata for all four ensemble members. On startup, all four candidates are retrained and combined into one active soft-voting ensemble. The home page has a single Train all models button to rebuild the ensemble. The UI intentionally does not display accuracy metrics. These research metrics are not clinical validation. Every prediction includes the research-prototype disclaimer.
 
 ## Tests
 
