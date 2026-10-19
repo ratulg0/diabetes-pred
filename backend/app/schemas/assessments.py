@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -12,11 +12,11 @@ class AssessmentInput(BaseModel):
     """Input matching the replacement dataset's 14 feature columns."""
     model_config = ConfigDict(extra="forbid")
 
-    gender: str = Field(min_length=1, max_length=20)
+    gender: Literal["Female", "Male"]
     age: int = Field(ge=1, le=120)
-    physical_activity: str = Field(min_length=1, max_length=30)
-    smoking_status: str = Field(min_length=1, max_length=30)
-    alcohol_intake: str | None = Field(default=None, min_length=1, max_length=30)
+    physical_activity: Literal["Low", "Moderate", "High"]
+    smoking_status: Literal["Never", "Former", "Current"]
+    alcohol_intake: Literal["Occasional", "Regular"] | None = None
     glucose: float | None = Field(default=None, ge=0, le=600)
     blood_pressure: float | None = Field(default=None, ge=0, le=300)
     skin_thickness: float | None = Field(default=None, ge=0, le=150)
@@ -24,8 +24,8 @@ class AssessmentInput(BaseModel):
     bmi: float | None = Field(default=None, ge=0, le=100)
     cholesterol: float | None = Field(default=None, ge=0, le=1000)
     diabetes_pedigree_function: float | None = Field(default=None, ge=0, le=10)
-    family_history: str = Field(min_length=1, max_length=20)
-    hypertension: str = Field(min_length=1, max_length=20)
+    family_history: Literal["No", "Yes"]
+    hypertension: Literal["No", "Yes"]
 
     @field_validator("gender", "physical_activity", "smoking_status", "alcohol_intake", "family_history", "hypertension")
     @classmethod
