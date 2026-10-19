@@ -557,14 +557,14 @@ function Assessment({
     setError("");
     setResult(null);
     if (!values.age || !values.gender || !values.physical_activity || !values.smoking_status ||
-        !values.alcohol_intake || !values.family_history || !values.hypertension) {
+        !values.family_history || !values.hypertension) {
       setError("Complete the demographic and categorical fields. Numeric measurements may be left blank if unavailable.");
       return;
     }
     const numericKeys = ["age", "glucose", "blood_pressure", "skin_thickness", "insulin", "bmi", "cholesterol", "diabetes_pedigree_function"];
     const payload = Object.fromEntries(fields.map((field) => {
       const raw = values[field.key];
-      return [field.key, numericKeys.includes(field.key) ? (raw === undefined || raw === "" ? null : Number(raw)) : raw];
+      return [field.key, numericKeys.includes(field.key) ? (raw === undefined || raw === "" ? null : Number(raw)) : (field.key === "alcohol_intake" && !raw ? null : raw)];
     })) as AssessmentInput;
     setSaving(true);
     try {
@@ -598,9 +598,9 @@ function Assessment({
               <span>{field.label}</span>
               {"hint" in field && field.hint && <span className="mt-1 block text-xs font-normal text-slate-400">{field.hint}</span>}
               {field.kind === "select" ? (
-                <select required value={values[field.key] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [field.key]: e.target.value }))}
+                <select required={field.key !== "alcohol_intake"} value={values[field.key] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [field.key]: e.target.value }))}
                   className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                  <option value="" disabled>Select an answer</option>
+                  <option value="" disabled={field.key !== "alcohol_intake"}>{field.key === "alcohol_intake" ? "Not provided (optional)" : "Select an answer"}</option>
                   {field.options.map((option) => <option key={option} value={option}>{option}</option>)}
                 </select>
               ) : (
