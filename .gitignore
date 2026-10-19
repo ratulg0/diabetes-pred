@@ -13,3 +13,5 @@ venv/
 *.joblib
 *.pkl
 *.model
+*.metadata.json
+backend/.local/

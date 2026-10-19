@@ -2,6 +2,20 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "glucocare: start services",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\.vscode\\start-glucocare.ps1"
+      ],
+      "detail": "Start the FastAPI backend and Vite frontend before launching the browser debugger",
+      "problemMatcher": []
+    },
+    {
       "label": "frontend: dev server",
       "type": "shell",
       "command": "powershell.exe",

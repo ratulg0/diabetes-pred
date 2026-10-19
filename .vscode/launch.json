@@ -8,7 +8,7 @@
       "url": "http://127.0.0.1:5173",
       "webRoot": "${workspaceFolder}/frontend",
       "sourceMaps": true,
-      "preLaunchTask": "frontend: dev server",
+      "preLaunchTask": "glucocare: start services",
       "presentation": {
         "group": "debug"
       }
@@ -20,7 +20,7 @@
       "url": "http://127.0.0.1:5173",
       "webRoot": "${workspaceFolder}/frontend",
       "sourceMaps": true,
-      "preLaunchTask": "frontend: dev server"
+      "preLaunchTask": "glucocare: start services"
     }
   ]
 }
