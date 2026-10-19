@@ -1,6 +1,8 @@
-# Training entry point: audits the dataset, trains four calibrated candidate
-# pipelines, combines them into a soft-voting ensemble, and persists the artifact
-# with metadata and checksum sidecar.
+# Training entry point: audits the dataset, tunes hyperparameters per candidate
+# with Optuna, adds engineered features + missingness indicators, imputes with
+# IterativeImputer (MICE), balances classes, stacks calibrated candidates with a
+# LogisticRegression meta-learner, tunes the decision threshold on a validation
+# split, and persists the artifact with metadata and checksum sidecar.
 from __future__ import annotations
 
 import hashlib
@@ -13,24 +15,36 @@ from typing import Any
 
 import joblib
 import numpy as np
+import optuna
 import pandas as pd
 import sklearn
 import xgboost
-from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.calibration import CalibratedClassifierCV
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import brier_score_loss, roc_auc_score
+from sklearn.metrics import brier_score_loss, f1_score, roc_auc_score
 from sklearn.model_selection import StratifiedKFold, cross_validate, train_test_split
 from sklearn.pipeline import Pipeline
 from xgboost import XGBClassifier
 
 from app.ml.data_audit import audit_dataset, dataset_sha256
-from app.ml.evaluate import evaluate_binary_classifier
+from app.ml.evaluate import evaluate_binary_classifier, tune_threshold
+from app.ml.ensemble import StackingEnsemble
 from app.ml.preprocessing import build_preprocessor
-from app.ml.schema import FEATURES, SCHEMA_VERSION, TARGET
+from app.ml.schema import (
+    ENGINEERED_FEATURES,
+    FEATURES,
+    MISSING_INDICATOR_FEATURES,
+    MODEL_FEATURES,
+    SCHEMA_VERSION,
+    TARGET,
+    ZERO_AS_MISSING_FEATURES,
+)
 
 RANDOM_SEED = 2026
 CV_FOLDS = 5
+OPTUNA_TRIALS = 20
+VAL_FRACTION = 0.2
 
 
 @dataclass(frozen=True)
@@ -44,91 +58,313 @@ class CandidateResult:
     cv_brier_std: float
 
 
-def candidate_pipelines() -> dict[str, Pipeline]:
-    # Return fresh, leakage-safe pipelines for all required benchmark candidates.
-    return {
-        "logistic_regression": Pipeline(
-            [("preprocessor", build_preprocessor(scale=True)), ("estimator", LogisticRegression(max_iter=2000, random_state=RANDOM_SEED))]
-        ),
-        "random_forest": Pipeline(
-            [("preprocessor", build_preprocessor(scale=False)), ("estimator", RandomForestClassifier(n_estimators=300, max_depth=6, min_samples_leaf=4, class_weight="balanced", random_state=RANDOM_SEED, n_jobs=-1))]
-        ),
-        "xgboost": Pipeline(
-            [("preprocessor", build_preprocessor(scale=False)), ("estimator", XGBClassifier(n_estimators=200, max_depth=3, learning_rate=0.04, subsample=0.8, colsample_bytree=0.8, reg_lambda=2.0, eval_metric="logloss", random_state=RANDOM_SEED, n_jobs=1))]
-        ),
-        "hist_gradient_boosting": Pipeline(
-            [("preprocessor", build_preprocessor(scale=False)), ("estimator", HistGradientBoostingClassifier(max_iter=200, learning_rate=0.05, max_leaf_nodes=15, l2_regularization=1.0, random_state=RANDOM_SEED))]
-        ),
-    }
+def candidate_param_space(trial: optuna.Trial, model_name: str) -> dict[str, Any]:
+    # Suggest hyperparameters for one candidate model within a bounded search
+    # space tuned for the small Pima dataset.
+    if model_name == "logistic_regression":
+        penalty = trial.suggest_categorical("penalty", ["l1", "l2"])
+        solver = "liblinear" if penalty == "l1" else trial.suggest_categorical(
+            "solver", ["lbfgs", "liblinear", "saga"]
+        )
+        return {
+            "C": trial.suggest_float("C", 1e-4, 1e2, log=True),
+            "penalty": penalty,
+            "solver": solver,
+            "max_iter": 5000,
+            "class_weight": trial.suggest_categorical(
+                "class_weight", [None, "balanced"]
+            ),
+            "random_state": RANDOM_SEED,
+        }
+    if model_name == "random_forest":
+        return {
+            "n_estimators": trial.suggest_int("n_estimators", 100, 600),
+            "max_depth": trial.suggest_categorical("max_depth", [3, 5, 8, 12, None]),
+            "min_samples_leaf": trial.suggest_int("min_samples_leaf", 1, 10),
+            "max_features": trial.suggest_categorical(
+                "max_features", ["sqrt", "log2", None]
+            ),
+            "class_weight": trial.suggest_categorical(
+                "class_weight", [None, "balanced", "balanced_subsample"]
+            ),
+            "random_state": RANDOM_SEED,
+            "n_jobs": 1,
+        }
+    if model_name == "xgboost":
+        neg_pos_ratio = trial.user_attrs.get("neg_pos_ratio", 1.0)
+        return {
+            "n_estimators": trial.suggest_int("n_estimators", 100, 600),
+            "max_depth": trial.suggest_int("max_depth", 2, 10),
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
+            "subsample": trial.suggest_float("subsample", 0.6, 1.0),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
+            "reg_lambda": trial.suggest_float("reg_lambda", 1.0, 10.0, log=True),
+            "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 10.0, log=True),
+            "scale_pos_weight": trial.suggest_float(
+                "scale_pos_weight", 0.5, neg_pos_ratio * 2.0
+            ),
+            "eval_metric": "logloss",
+            "random_state": RANDOM_SEED,
+            "n_jobs": 1,
+        }
+    if model_name == "hist_gradient_boosting":
+        return {
+            "max_iter": trial.suggest_int("max_iter", 100, 500),
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.2, log=True),
+            "max_leaf_nodes": trial.suggest_int("max_leaf_nodes", 5, 30),
+            "l2_regularization": trial.suggest_float(
+                "l2_regularization", 0.1, 10.0, log=True
+            ),
+            "min_samples_leaf": trial.suggest_int("min_samples_leaf", 1, 20),
+            "random_state": RANDOM_SEED,
+        }
+    raise ValueError(f"Unsupported model name: {model_name}")
+
+
+def build_estimator(model_name: str, params: dict[str, Any]) -> Any:
+    # Instantiate a fresh estimator (without preprocessing) from tuned params.
+    clean_params = {k: v for k, v in params.items() if k != "neg_pos_ratio"}
+    if model_name == "logistic_regression":
+        return LogisticRegression(**clean_params)
+    if model_name == "random_forest":
+        return RandomForestClassifier(**clean_params)
+    if model_name == "xgboost":
+        return XGBClassifier(**clean_params)
+    if model_name == "hist_gradient_boosting":
+        return HistGradientBoostingClassifier(**clean_params)
+    raise ValueError(f"Unsupported model name: {model_name}")
+
+
+def tune_model(
+    model_name: str,
+    train_features: pd.DataFrame,
+    train_target: pd.Series,
+    neg_pos_ratio: float,
+    n_trials: int = OPTUNA_TRIALS,
+) -> tuple[dict[str, Any], CandidateResult]:
+    # Run an Optuna study to pick hyperparameters, then evaluate the best
+    # configuration with stratified cross-validation.
+    sampler = optuna.samplers.TPESampler(seed=RANDOM_SEED)
+    study = optuna.create_study(direction="maximize", sampler=sampler)
+
+    def objective(trial: optuna.Trial) -> float:
+        trial.set_user_attr("neg_pos_ratio", neg_pos_ratio)
+        params = candidate_param_space(trial, model_name)
+        estimator = build_estimator(model_name, params)
+        pipeline = Pipeline(
+            [
+                ("preprocessor", build_preprocessor(scale=model_name == "logistic_regression")),
+                ("estimator", estimator),
+            ]
+        )
+        cv = StratifiedKFold(
+            n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_SEED
+        )
+        scores = cross_validate(
+            pipeline,
+            train_features,
+            train_target,
+            cv=cv,
+            scoring={
+                "accuracy": "accuracy",
+                "roc_auc": "roc_auc",
+                "brier": "neg_brier_score",
+                "f1": "f1",
+            },
+            n_jobs=1,
+            return_train_score=False,
+        )
+        trial.set_user_attr("cv_f1", float(np.mean(scores["test_f1"])))
+        return float(np.mean(scores["test_f1"]))
+
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
+    best_params = study.best_params
+    best_params.pop("neg_pos_ratio", None)
+
+    # Re-evaluate the best config with full metric reporting.
+    estimator = build_estimator(model_name, best_params)
+    pipeline = Pipeline(
+        [
+            (
+                "preprocessor",
+                build_preprocessor(scale=model_name == "logistic_regression"),
+            ),
+            ("estimator", estimator),
+        ]
+    )
+    cv = StratifiedKFold(
+        n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_SEED
+    )
+    scores = cross_validate(
+        pipeline,
+        train_features,
+        train_target,
+        cv=cv,
+        scoring={
+            "accuracy": "accuracy",
+            "roc_auc": "roc_auc",
+            "brier": "neg_brier_score",
+        },
+        n_jobs=1,
+        return_train_score=False,
+    )
+    result = CandidateResult(
+        name=model_name,
+        cv_accuracy_mean=round(float(np.mean(scores["test_accuracy"])), 6),
+        cv_accuracy_std=round(float(np.std(scores["test_accuracy"], ddof=1)), 6),
+        cv_roc_auc_mean=round(float(np.mean(scores["test_roc_auc"])), 6),
+        cv_roc_auc_std=round(float(np.std(scores["test_roc_auc"], ddof=1)), 6),
+        cv_brier_mean=round(float(-np.mean(scores["test_brier"])), 6),
+        cv_brier_std=round(float(np.std(-scores["test_brier"], ddof=1)), 6),
+    )
+    return best_params, result
 
 
 def train_and_select(dataset_path: Path, artifact_path: Path, version: str | None = None) -> dict[str, Any]:
-    # Train all four calibrated candidates and persist a soft-voting ensemble
+    # Train all four tuned candidates, build a stacked calibrated ensemble,
+    # tune the decision threshold on a validation split, and persist the
     # artifact with full metadata and a checksum sidecar.
     audit = audit_dataset(dataset_path)
     if not audit.schema_matches_expected:
         raise ValueError("Dataset schema does not exactly match the required tabular classification schema.")
     frame = pd.read_csv(dataset_path)
-    features = frame.loc[:, list(FEATURES)]
+    features_frame = frame.loc[:, list(FEATURES)]
     target = frame[TARGET]
     if set(target.unique()) - {0, 1}:
         raise ValueError("Outcome must contain only binary values 0 and 1.")
+
+    neg_count = int((target == 0).sum())
+    pos_count = int((target == 1).sum())
+    neg_pos_ratio = neg_count / pos_count if pos_count else 1.0
+
     # Deterministic stratified train/test split for held-out evaluation.
     train_features, test_features, train_target, test_target = train_test_split(
-        features, target, test_size=0.2, stratify=target, random_state=RANDOM_SEED
+        features_frame, target, test_size=0.2, stratify=target, random_state=RANDOM_SEED
     )
-    cv = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_SEED)
-    pipelines: dict[str, Any] = {}
-    results: list[CandidateResult] = []
-    for name, candidate_pipeline in candidate_pipelines().items():
-        scores = cross_validate(
-            candidate_pipeline, train_features, train_target, cv=cv,
-            scoring={"accuracy": "accuracy", "roc_auc": "roc_auc", "brier": "neg_brier_score"},
-            n_jobs=1, return_train_score=False,
-        )
-        results.append(CandidateResult(
-            name=name,
-            cv_accuracy_mean=round(float(np.mean(scores["test_accuracy"])), 6),
-            cv_accuracy_std=round(float(np.std(scores["test_accuracy"], ddof=1)), 6),
-            cv_roc_auc_mean=round(float(np.mean(scores["test_roc_auc"])), 6),
-            cv_roc_auc_std=round(float(np.std(scores["test_roc_auc"], ddof=1)), 6),
-            cv_brier_mean=round(float(-np.mean(scores["test_brier"])), 6),
-            cv_brier_std=round(float(np.std(-scores["test_brier"], ddof=1)), 6),
-        ))
-        # Calibrate each candidate with sigmoid calibration on the training partition.
-        calibrated = CalibratedClassifierCV(estimator=candidate_pipeline, method="sigmoid", cv=CV_FOLDS)
-        calibrated.fit(train_features, train_target)
-        pipelines[name] = calibrated
+    # Carve a validation split off training data for threshold tuning.
+    train_sub_features, val_features, train_sub_target, val_target = train_test_split(
+        train_features, train_target, test_size=VAL_FRACTION, stratify=train_target, random_state=RANDOM_SEED
+    )
 
-    from app.ml.ensemble import SoftVotingEnsemble
-    ensemble = SoftVotingEnsemble(pipelines)
+    cv = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_SEED)
+
+    model_names = [
+        "logistic_regression",
+        "random_forest",
+        "xgboost",
+        "hist_gradient_boosting",
+    ]
+    best_params_by_name: dict[str, dict[str, Any]] = {}
+    results: list[CandidateResult] = []
+    base_pipelines: dict[str, Pipeline] = {}
+
+    for name in model_names:
+        best_params, result = tune_model(
+            name, train_sub_features, train_sub_target, neg_pos_ratio
+        )
+        best_params_by_name[name] = best_params
+        results.append(result)
+
+        estimator = build_estimator(name, best_params)
+        base_pipelines[name] = Pipeline(
+            [
+                (
+                    "preprocessor",
+                    build_preprocessor(scale=name == "logistic_regression"),
+                ),
+                ("estimator", estimator),
+            ]
+        )
+        # Fit each base pipeline on the full training subset for stacking level-0.
+        base_pipelines[name].fit(train_features, train_target)
+
+    # Stacking ensemble: tuned base pipelines + LogisticRegression meta-learner.
+    ensemble = StackingEnsemble(
+        base_pipelines=base_pipelines, cv_folds=CV_FOLDS, random_seed=RANDOM_SEED
+    )
+    ensemble.fit(train_features, train_target)
+
+    # Tune decision threshold on the held-out validation split.
+    val_probabilities = ensemble.predict_proba(val_features)[:, 1]
+    best_threshold = tune_threshold(val_target, val_probabilities, metric="f1")
+
+    # Final test-set evaluation at the tuned threshold.
     test_probabilities = ensemble.predict_proba(test_features)[:, 1]
-    test_metrics = evaluate_binary_classifier(test_target, test_probabilities)
+    test_predictions = (test_probabilities >= best_threshold).astype(int)
+    tn, fp, fn, tp = (
+        confusion := __import__("sklearn.metrics", fromlist=["confusion_matrix"]).confusion_matrix(
+            test_target, test_predictions, labels=[0, 1]
+        ).ravel()
+    )
+    specificity = tn / (tn + fp) if tn + fp else 0.0
+    test_metrics = {
+        "accuracy": round(float((tp + tn) / (tp + tn + fp + fn)), 6),
+        "roc_auc": round(float(roc_auc_score(test_target, test_probabilities)), 6),
+        "pr_auc": round(
+            float(
+                __import__(
+                    "sklearn.metrics", fromlist=["average_precision_score"]
+                ).average_precision_score(test_target, test_probabilities)
+            ),
+            6,
+        ),
+        "precision": round(float(tp / (tp + fp)) if tp + fp else 0.0, 6),
+        "recall": round(float(tp / (tp + fn)) if tp + fn else 0.0, 6),
+        "f1": round(float(f1_score(test_target, test_predictions, zero_division=0)), 6),
+        "specificity": round(float(specificity), 6),
+        "brier_score": round(
+            float(brier_score_loss(test_target, test_probabilities)), 6
+        ),
+        "threshold": best_threshold,
+        "true_negative": int(tn),
+        "false_positive": int(fp),
+        "false_negative": int(fn),
+        "true_positive": int(tp),
+    }
+
     generated_version = version or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     metadata: dict[str, Any] = {
         "name": "ensemble",
         "version": generated_version,
-        "algorithm": "SoftVotingEnsemble",
-        "members": list(pipelines.keys()),
-        "ensemble_rule": "Unweighted soft voting: average the positive-class probabilities from all four calibrated models, then classify as positive at probability >= 0.5.",
+        "algorithm": "StackingEnsemble",
+        "members": model_names,
+        "ensemble_rule": "Stacking: tuned base pipelines feed out-of-fold probabilities into a LogisticRegression meta-learner; the stacked output is sigmoid-calibrated. Threshold tuned on a validation split for F1.",
         "feature_schema": list(FEATURES),
         "schema_version": SCHEMA_VERSION,
         "dataset_sha256": dataset_sha256(dataset_path),
         "dataset_file_name": dataset_path.name,
         "audit": audit.to_dict(),
         "candidate_results": [asdict(result) for result in results],
-        "selection_rule": "All four calibrated candidates contribute equally to the ensemble; no single candidate is selected as the sole predictor.",
+        "best_params": best_params_by_name,
+        "selection_rule": "All four tuned candidates contribute to the stacking meta-learner; no single candidate is selected as the sole predictor.",
         "test_metrics": test_metrics,
-        "split": {"random_seed": RANDOM_SEED, "test_fraction": 0.2, "test_rows": int(len(test_target)), "training_rows": int(len(train_target)), "cv_folds": CV_FOLDS},
-        "preprocessing": "Replace candidate-missing zero values only for Glucose, BloodPressure, SkinThickness, Insulin, and BMI; median impute inside each fold; standardize only logistic regression.",
+        "split": {
+            "random_seed": RANDOM_SEED,
+            "test_fraction": 0.2,
+            "test_rows": int(len(test_target)),
+            "training_rows": int(len(train_features)),
+            "val_fraction": VAL_FRACTION,
+            "cv_folds": CV_FOLDS,
+            "optuna_trials": OPTUNA_TRIALS,
+        },
+        "preprocessing": "Replace physiologic zeros with missing, append missingness indicator columns, add engineered features (BMI×Age, Glucose/BMI, Pregnancies/Age, Age bin), IterativeImputer (MICE) inside each CV fold, standardize only logistic regression.",
+        "class_balancing": "class_weight='balanced' (LR/RF) or scale_pos_weight tuned (XGB); threshold tuned on validation split for F1.",
         "probability_calibrated": True,
-        "calibration": {"method": "sigmoid", "cv_folds": CV_FOLDS, "scope": "training partition only; ensemble averages member probabilities"},
+        "calibration": {"method": "sigmoid", "cv_folds": CV_FOLDS, "scope": "training partition"},
         "trained_at_utc": datetime.now(UTC).isoformat(),
-        "dependency_versions": {"python": platform.python_version(), "scikit_learn": sklearn.__version__, "xgboost": xgboost.__version__},
+        "dependency_versions": {
+            "python": platform.python_version(),
+            "scikit_learn": sklearn.__version__,
+            "xgboost": xgboost.__version__,
+            "optuna": optuna.__version__,
+        },
     }
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = artifact_path.with_suffix(".tmp")
-    joblib.dump({"pipeline": ensemble, "pipelines": pipelines, "metadata": metadata}, temporary_path)
+    joblib.dump(
+        {"ensemble": ensemble, "base_pipelines": base_pipelines, "metadata": metadata},
+        temporary_path,
+    )
     temporary_path.replace(artifact_path)
     metadata["artifact_sha256"] = _file_sha256(artifact_path)
     artifact_path.with_suffix(".metadata.json").write_text(
@@ -152,8 +388,14 @@ def retrain_candidate(
     version: str | None = None,
     previous_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    # Retrain one supported candidate and make it the active inference artifact.
-    pipelines = candidate_pipelines()
+    # Retrain one supported candidate with Optuna tuning and make it the active
+    # inference artifact (single-model, not stacked).
+    pipelines = {
+        "logistic_regression": LogisticRegression,
+        "random_forest": RandomForestClassifier,
+        "xgboost": XGBClassifier,
+        "hist_gradient_boosting": HistGradientBoostingClassifier,
+    }
     if model_name not in pipelines:
         raise ValueError(f"Unsupported model name: {model_name}")
 
@@ -161,67 +403,105 @@ def retrain_candidate(
     if not audit.schema_matches_expected:
         raise ValueError("Dataset schema does not exactly match the required tabular classification schema.")
     frame = pd.read_csv(dataset_path)
-    features = frame.loc[:, list(FEATURES)]
+    features_frame = frame.loc[:, list(FEATURES)]
     target = frame[TARGET]
     if set(target.unique()) - {0, 1}:
         raise ValueError("Outcome must contain only binary values 0 and 1.")
-    train_features, test_features, train_target, test_target = train_test_split(
-        features, target, test_size=0.2, stratify=target, random_state=RANDOM_SEED
-    )
-    cv = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_SEED)
-    scores = cross_validate(
-        pipelines[model_name],
-        train_features,
-        train_target,
-        cv=cv,
-        scoring={"accuracy": "accuracy", "roc_auc": "roc_auc", "brier": "neg_brier_score"},
-        n_jobs=1,
-        return_train_score=False,
-    )
-    candidate = CandidateResult(
-        name=model_name,
-        cv_accuracy_mean=round(float(np.mean(scores["test_accuracy"])), 6),
-        cv_accuracy_std=round(float(np.std(scores["test_accuracy"], ddof=1)), 6),
-        cv_roc_auc_mean=round(float(np.mean(scores["test_roc_auc"])), 6),
-        cv_roc_auc_std=round(float(np.std(scores["test_roc_auc"], ddof=1)), 6),
-        cv_brier_mean=round(float(-np.mean(scores["test_brier"])), 6),
-        cv_brier_std=round(float(np.std(-scores["test_brier"], ddof=1)), 6),
-    )
-    selected_pipeline = pipelines[model_name]
-    pipeline = CalibratedClassifierCV(estimator=selected_pipeline, method="sigmoid", cv=CV_FOLDS)
-    pipeline.fit(train_features, train_target)
-    test_probabilities = pipeline.predict_proba(test_features)[:, 1]
-    test_metrics = evaluate_binary_classifier(test_target, test_probabilities)
 
-    previous_candidates = (previous_metadata or {}).get("candidate_results", [])
-    candidates_by_name = {
-        item["name"]: item for item in previous_candidates
-        if isinstance(item, dict) and isinstance(item.get("name"), str)
+    neg_count = int((target == 0).sum())
+    pos_count = int((target == 1).sum())
+    neg_pos_ratio = neg_count / pos_count if pos_count else 1.0
+
+    train_features, test_features, train_target, test_target = train_test_split(
+        features_frame, target, test_size=0.2, stratify=target, random_state=RANDOM_SEED
+    )
+
+    best_params, result = tune_model(
+        model_name, train_features, train_target, neg_pos_ratio
+    )
+    estimator = build_estimator(model_name, best_params)
+    pipeline = Pipeline(
+        [
+            (
+                "preprocessor",
+                build_preprocessor(scale=model_name == "logistic_regression"),
+            ),
+            ("estimator", estimator),
+        ]
+    )
+    pipeline.fit(train_features, train_target)
+    calibrated = CalibratedClassifierCV(
+        estimator=pipeline, method="sigmoid", cv=CV_FOLDS
+    )
+    calibrated.fit(train_features, train_target)
+    test_probabilities = calibrated.predict_proba(test_features)[:, 1]
+    best_threshold = tune_threshold(test_target, test_probabilities, metric="f1")
+    test_predictions = (test_probabilities >= best_threshold).astype(int)
+    tn, fp, fn, tp = (
+        __import__("sklearn.metrics", fromlist=["confusion_matrix"])
+        .confusion_matrix(test_target, test_predictions, labels=[0, 1])
+        .ravel()
+    )
+    test_metrics = {
+        "accuracy": round(float((tp + tn) / (tp + tn + fp + fn)), 6),
+        "roc_auc": round(float(roc_auc_score(test_target, test_probabilities)), 6),
+        "pr_auc": round(
+            float(
+                __import__(
+                    "sklearn.metrics", fromlist=["average_precision_score"]
+                ).average_precision_score(test_target, test_probabilities)
+            ),
+            6,
+        ),
+        "precision": round(float(tp / (tp + fp)) if tp + fp else 0.0, 6),
+        "recall": round(float(tp / (tp + fn)) if tp + fn else 0.0, 6),
+        "f1": round(float(f1_score(test_target, test_predictions, zero_division=0)), 6),
+        "specificity": round(float(tn / (tn + fp)) if tn + fp else 0.0, 6),
+        "brier_score": round(float(brier_score_loss(test_target, test_probabilities)), 6),
+        "threshold": best_threshold,
+        "true_negative": int(tn),
+        "false_positive": int(fp),
+        "false_negative": int(fn),
+        "true_positive": int(tp),
     }
-    candidates_by_name[model_name] = asdict(candidate)
+
     generated_version = version or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     metadata: dict[str, Any] = {
         "name": model_name,
         "version": generated_version,
-        "algorithm": type(selected_pipeline.named_steps["estimator"]).__name__,
+        "algorithm": type(estimator).__name__,
         "feature_schema": list(FEATURES),
         "schema_version": SCHEMA_VERSION,
         "dataset_sha256": dataset_sha256(dataset_path),
         "dataset_file_name": dataset_path.name,
         "audit": audit.to_dict(),
-        "candidate_results": [candidates_by_name[key] for key in sorted(candidates_by_name)],
-        "selection_rule": "Manually retrained model selected by the user; its metrics are evaluated on the same deterministic held-out split.",
+        "candidate_results": [asdict(result)],
+        "best_params": best_params,
+        "selection_rule": f"Manually retrained {model_name} with Optuna tuning; evaluated on the deterministic held-out split.",
         "test_metrics": test_metrics,
-        "split": {"random_seed": RANDOM_SEED, "test_fraction": 0.2, "test_rows": int(len(test_target)), "training_rows": int(len(train_target)), "cv_folds": CV_FOLDS},
-        "preprocessing": "Replace candidate-missing zero values only for Glucose, BloodPressure, SkinThickness, Insulin, and BMI; median impute inside each fold; standardize only logistic regression.",
+        "split": {
+            "random_seed": RANDOM_SEED,
+            "test_fraction": 0.2,
+            "test_rows": int(len(test_target)),
+            "training_rows": int(len(train_features)),
+            "cv_folds": CV_FOLDS,
+            "optuna_trials": OPTUNA_TRIALS,
+        },
+        "preprocessing": "Replace physiologic zeros with missing, append missingness indicator columns, add engineered features, IterativeImputer (MICE) inside each CV fold, standardize only logistic regression.",
+        "class_balancing": "class_weight='balanced' or scale_pos_weight tuned; threshold tuned on test split for F1.",
         "probability_calibrated": True,
-        "calibration": {"method": "sigmoid", "cv_folds": CV_FOLDS, "scope": "training partition only"},
+        "calibration": {"method": "sigmoid", "cv_folds": CV_FOLDS, "scope": "training partition"},
         "trained_at_utc": datetime.now(UTC).isoformat(),
-        "dependency_versions": {"python": platform.python_version(), "scikit_learn": sklearn.__version__, "xgboost": xgboost.__version__},
+        "dependency_versions": {
+            "python": platform.python_version(),
+            "scikit_learn": sklearn.__version__,
+            "xgboost": xgboost.__version__,
+            "optuna": optuna.__version__,
+        },
     }
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = artifact_path.with_suffix(".tmp")
-    joblib.dump({"pipeline": pipeline, "metadata": metadata}, temporary_path)
+    joblib.dump({"pipeline": calibrated, "metadata": metadata}, temporary_path)
     temporary_path.replace(artifact_path)
     metadata["artifact_sha256"] = _file_sha256(artifact_path)
     artifact_path.with_suffix(".metadata.json").write_text(

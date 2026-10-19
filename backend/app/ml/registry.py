@@ -11,7 +11,7 @@ from typing import Any
 import joblib
 import pandas as pd
 
-from app.ml.schema import FEATURES
+from app.ml.schema import FEATURES, MODEL_FEATURES
 
 
 class ModelUnavailableError(RuntimeError):
@@ -41,9 +41,15 @@ class ModelRegistry:
         if not self.artifact_path.is_file():
             raise ModelUnavailableError("No trained model artifact is available. Run the controlled training command first.")
         package = joblib.load(self.artifact_path)
-        if not isinstance(package, dict) or "pipeline" not in package or "metadata" not in package:
+        if not isinstance(package, dict) or "metadata" not in package:
             raise ModelUnavailableError("The model artifact has an invalid package format.")
+        # Support both the stacked artifact ("ensemble") and legacy single-model
+        # artifacts ("pipeline").
+        pipeline = package.get("ensemble") or package.get("pipeline")
+        if pipeline is None:
+            raise ModelUnavailableError("The model artifact has no usable pipeline.")
         metadata = package["metadata"]
+        # The API accepts the 8 raw FEATURES; the pipeline engineers the rest.
         if metadata.get("feature_schema") != list(FEATURES):
             raise ModelUnavailableError("The model artifact feature schema does not match this API.")
         sidecar_path = self.artifact_path.with_suffix(".metadata.json")
@@ -55,7 +61,7 @@ class ModelRegistry:
                 raise ModelUnavailableError("The model metadata sidecar is invalid.") from error
         if expected_checksum and expected_checksum != _file_sha256(self.artifact_path):
             raise ModelUnavailableError("The model artifact checksum does not match its metadata.")
-        self._loaded = LoadedModel(pipeline=package["pipeline"], metadata=metadata)
+        self._loaded = LoadedModel(pipeline=pipeline, metadata=metadata)
         return self._loaded
 
     def status(self) -> dict[str, Any]:
