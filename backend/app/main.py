@@ -14,7 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
-from app.api.routes import assessments, dashboard, health, lifestyle_assessments, models, preferences
+from app.api.routes import assessments, dashboard, dataset_assessments, health, lifestyle_assessments, models, preferences
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.db.session import Database
@@ -78,6 +78,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router, prefix=runtime_settings.api_prefix)
     app.include_router(assessments.router, prefix=runtime_settings.api_prefix)
     app.include_router(lifestyle_assessments.router, prefix=runtime_settings.api_prefix)
+    app.include_router(dataset_assessments.router, prefix=runtime_settings.api_prefix)
     app.include_router(dashboard.router, prefix=runtime_settings.api_prefix)
     app.include_router(models.router, prefix=runtime_settings.api_prefix)
     app.include_router(preferences.router, prefix=runtime_settings.api_prefix)

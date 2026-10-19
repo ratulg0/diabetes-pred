@@ -123,3 +123,30 @@ export type ApiErrorBody = {
   request_id?: string;
   field_errors?: Record<string, string>;
 };
+
+
+// Inputs and output for the separately trained uploaded-dataset model.
+export type DatasetAssessmentInput = {
+  gender: "Male" | "Female";
+  age: number;
+  physical_activity: "Low" | "Moderate" | "High";
+  smoking_status: "Never" | "Former" | "Current";
+  alcohol_intake: "Occasional" | "Regular";
+  glucose: number;
+  blood_pressure: number;
+  skin_thickness: number;
+  insulin: number;
+  bmi: number;
+  cholesterol: number;
+  diabetes_pedigree_function: number;
+  family_history: "Yes" | "No";
+  hypertension: "Yes" | "No";
+};
+
+export type DatasetPredictionResponse = {
+  prediction_label: "Diabetic" | "Non-diabetic";
+  probability: number;
+  model_name: string;
+  metrics: Record<string, number | string>;
+  disclaimer: string;
+};

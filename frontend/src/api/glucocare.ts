@@ -6,6 +6,8 @@ import type {
   AssessmentPage,
   AssessmentRecord,
   DashboardSummary,
+  DatasetAssessmentInput,
+  DatasetPredictionResponse,
   LifestyleAssessmentInput,
   LifestyleAssessmentPage,
   LifestyleAssessmentRecord,
@@ -48,6 +50,12 @@ export const glucocareApi = {
     request<Preferences>(`${API_PREFIX}/preferences`, {
       method: "PUT",
       body: JSON.stringify(preferences),
+    }),
+  // Uploaded 20,000-row dataset model (separate from Pima and CDC models).
+  predictDatasetAssessment: (input: DatasetAssessmentInput) =>
+    request<DatasetPredictionResponse>(`${API_PREFIX}/dataset-assessments/predict`, {
+      method: "POST",
+      body: JSON.stringify(input),
     }),
   // Lifestyle assessment endpoints (CDC survey model).
   saveLifestyle: (input: LifestyleAssessmentInput) =>
