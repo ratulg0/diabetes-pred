@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import Callable
@@ -17,6 +18,7 @@ from app.core.logging import configure_logging
 from app.db.session import Database
 from app.db.base import Base
 from app.ml.registry import ModelRegistry
+from app.ml.train import train_and_select
 
 logger = logging.getLogger("glucocare.api")
 
@@ -32,6 +34,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if runtime_settings.uses_local_development_database:
             Base.metadata.create_all(app.state.database.engine)
         app.state.model_registry = ModelRegistry(runtime_settings.resolved_model_artifact_path)
+        try:
+            metadata = await asyncio.to_thread(
+                train_and_select,
+                runtime_settings.dataset_path,
+                runtime_settings.resolved_model_artifact_path,
+                runtime_settings.model_version,
+            )
+            app.state.model_registry.reload()
+            logger.info(
+                "startup_model_training_complete model=%s version=%s",
+                metadata["name"],
+                metadata["version"],
+            )
+        except Exception:
+            # Keep the previous artifact usable if startup training fails.
+            logger.exception("startup_model_training_failed")
+            existing = app.state.model_registry.status()
+            if not existing["available"]:
+                logger.error("No usable model artifact is available after startup training failed.")
         yield
 
     app = FastAPI(
