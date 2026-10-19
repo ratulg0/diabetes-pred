@@ -79,6 +79,7 @@ const MODEL_NAMES: Record<string, string> = {
   random_forest: "Random Forest",
   xgboost: "XGBoost",
   hist_gradient_boosting: "HistGradientBoosting",
+  ensemble: "Four-model soft-voting ensemble",
 };
 const modelName = (name: string) => MODEL_NAMES[name] ?? name;
 const displayGlucose = (value: number, unit: Preferences["glucose_unit"]) =>
@@ -420,7 +421,6 @@ function ModelCard({
 }) {
   const name = metadata?.name ? modelName(metadata.name) : "Unavailable";
   const version = metadata?.version ?? "";
-  const accuracy = metadata?.test_metrics?.accuracy;
   return (
     <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
       <p className="text-sm text-slate-500">Model status</p>
@@ -435,11 +435,6 @@ function ModelCard({
       <p className="mt-2 truncate text-xs text-slate-500">
         {available ? `${name} · ${version}` : "Train a compatible artifact to enable assessments."}
       </p>
-      {available && (
-        <p className="mt-2 text-sm font-semibold text-blue-800">
-          Held-out test accuracy: {percent(accuracy)}
-        </p>
-      )}
     </div>
   );
 }
@@ -678,15 +673,6 @@ function Assessment({
                 Estimated probability of a positive model result: {percent(result.probability)}
               </p>
             )}
-            <div className="mt-4 rounded-xl bg-blue-50 p-3">
-              <p className="text-xs text-blue-700">Selected model test accuracy</p>
-              <p className="mt-1 text-xl font-extrabold text-blue-950">{percent(result.model_accuracy)}</p>
-              {result.model_accuracy === null || result.model_accuracy === undefined ? (
-                <p className="mt-1 text-xs text-amber-800">Accuracy is missing from this saved model. Retrain the model and restart the backend.</p>
-              ) : (
-                <p className="mt-1 text-xs text-blue-700">Measured on a held-out dataset; not confidence in this individual result.</p>
-              )}
-            </div>
             <p className="mt-3 text-xs text-slate-500">
               Model: {modelName(result.model.name)} · {result.model.version}
             </p>
