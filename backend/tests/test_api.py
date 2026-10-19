@@ -5,16 +5,21 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 PAYLOAD = {
-    "pregnancies": 1,
+    "gender": "Female",
+    "age": 32,
+    "physical_activity": "Moderate",
+    "smoking_status": "Never",
+    "alcohol_intake": None,
     "glucose": 110,
     "blood_pressure": 72,
     "skin_thickness": 25,
     "insulin": 90,
     "bmi": 28.5,
+    "cholesterol": 180,
     "diabetes_pedigree_function": 0.45,
-    "age": 32,
+    "family_history": "No",
+    "hypertension": "No",
 }
-
 
 def test_health_and_ready(client: TestClient) -> None:
     # Health is always ok; readiness is ready when DB and model are available.
@@ -37,9 +42,9 @@ def test_persist_list_and_dashboard(client: TestClient) -> None:
     assert record["prediction_id"] != "not-persisted"
     assert record["probability"] is None
     assert record["prediction_label"] == (
-        "Likely YES for diabetes (model estimate)"
+        "Dataset class: Diabetic (research estimate)"
         if record["predicted_class"] == 1
-        else "Likely NO for diabetes (model estimate)"
+        else "Dataset class: Non-diabetic (research estimate)"
     )
     assert record["model_accuracy"] is None
     assert "not a diagnosis" in record["disclaimer"].lower()
