@@ -23,11 +23,8 @@ export type ModelIdentity = { name: string; version: string };
 export type ModelCandidateResult = {
   name: string;
   cv_accuracy_mean: number;
-  cv_accuracy_std: number;
+  cv_f1_mean: number;
   cv_roc_auc_mean: number;
-  cv_roc_auc_std: number;
-  cv_brier_mean: number;
-  cv_brier_std: number;
 };
 
 export type ModelMetadata = {
@@ -35,9 +32,9 @@ export type ModelMetadata = {
   version?: string;
   algorithm?: string;
   members?: string[];
-  ensemble_rule?: string;
+  selection_rule?: string;
   candidate_results?: ModelCandidateResult[];
-  test_metrics?: { accuracy?: number; roc_auc?: number; pr_auc?: number };
+  test_metrics?: { accuracy?: number; roc_auc?: number; pr_auc?: number; f1?: number; sensitivity?: number; specificity?: number };
 };
 
 export type AssessmentRecord = {
