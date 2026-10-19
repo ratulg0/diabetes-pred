@@ -1,5 +1,3 @@
-# Aggregate-only dataset diagnostics for the diabetes CSV. Individual records are
-# never emitted; only schema, distribution, and range summaries are produced.
 from __future__ import annotations
 
 import hashlib
@@ -9,7 +7,7 @@ from typing import Any
 
 import pandas as pd
 
-from app.ml.schema import EXPECTED_COLUMNS, FEATURES, TARGET, ZERO_AS_MISSING_FEATURES
+from app.ml.schema import EXPECTED_COLUMNS, FEATURES, TARGET
 
 
 @dataclass(frozen=True)
@@ -36,7 +34,6 @@ class DatasetAudit:
 
 
 def dataset_sha256(path: Path) -> str:
-    # Compute the file's SHA-256 digest in streaming chunks.
     digest = hashlib.sha256()
     with path.open("rb") as source:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
@@ -45,46 +42,39 @@ def dataset_sha256(path: Path) -> str:
 
 
 def audit_dataset(path: Path) -> DatasetAudit:
-    # Return aggregate-only dataset diagnostics; individual records are never emitted.
     frame = pd.read_csv(path)
-    actual_columns = list(frame.columns)
+    actual = list(frame.columns)
     expected = set(EXPECTED_COLUMNS)
-    unexpected_columns = sorted(set(actual_columns) - expected)
-    missing_columns = sorted(expected - set(actual_columns))
-    numeric_ranges: dict[str, dict[str, float | None]] = {}
-    for column in actual_columns:
+    ranges: dict[str, dict[str, float | None]] = {}
+    for column in actual:
         if pd.api.types.is_numeric_dtype(frame[column]):
-            numeric_ranges[column] = {
-                "min": _optional_float(frame[column].min()),
-                "max": _optional_float(frame[column].max()),
+            low, high = frame[column].min(), frame[column].max()
+            ranges[column] = {
+                "min": None if pd.isna(low) else float(low),
+                "max": None if pd.isna(high) else float(high),
             }
-    target_distribution: dict[str, int] = {}
-    if TARGET in frame.columns:
-        target_distribution = {str(key): int(value) for key, value in frame[TARGET].value_counts(dropna=False).items()}
-    notes = [
-        "The file matches the common Pima-style column layout, but provenance is not documented in this repository.",
-        "Zeros in Glucose, BloodPressure, SkinThickness, Insulin, and BMI are tracked as candidate missing encodings for a benchmark pipeline; this is an explicit modeling assumption, not proof about an individual record.",
-        "This is tabular classification data, not continuous glucose monitoring data.",
-    ]
+    target_counts = {}
+    if TARGET in frame:
+        target_counts = {str(k): int(v) for k, v in frame[TARGET].value_counts(dropna=False).items()}
     return DatasetAudit(
         file_name=path.name,
         sha256=dataset_sha256(path),
-        row_count=int(len(frame)),
-        column_count=int(len(actual_columns)),
-        columns=actual_columns,
-        dtypes={column: str(dtype) for column, dtype in frame.dtypes.items()},
-        schema_matches_expected=actual_columns == list(EXPECTED_COLUMNS),
-        unexpected_columns=unexpected_columns,
-        missing_columns=missing_columns,
+        row_count=len(frame),
+        column_count=len(actual),
+        columns=actual,
+        dtypes={k: str(v) for k, v in frame.dtypes.items()},
+        schema_matches_expected=set(actual) == expected and len(actual) == len(EXPECTED_COLUMNS),
+        unexpected_columns=sorted(set(actual) - expected),
+        missing_columns=sorted(expected - set(actual)),
         duplicate_rows=int(frame.duplicated().sum()),
-        target_distribution=target_distribution,
-        missing_counts={column: int(value) for column, value in frame.isna().sum().items()},
-        missing_percentages={column: round(float(value) * 100 / len(frame), 4) for column, value in frame.isna().sum().items()},
-        numeric_ranges=numeric_ranges,
-        zero_counts_for_candidate_missing_values={column: int((frame[column] == 0).sum()) for column in ZERO_AS_MISSING_FEATURES if column in frame},
-        notes=notes,
+        target_distribution=target_counts,
+        missing_counts={k: int(v) for k, v in frame.isna().sum().items()},
+        missing_percentages={k: round(float(v) * 100 / max(len(frame), 1), 4) for k, v in frame.isna().sum().items()},
+        numeric_ranges=ranges,
+        zero_counts_for_candidate_missing_values={},
+        notes=[
+            "Target labels are dataset labels, not a clinical diagnosis.",
+            "Missing values are imputed inside the model pipeline using training-fold statistics.",
+            "The dataset's provenance and clinical validity must be independently verified before any clinical use.",
+        ],
     )
-
-
-def _optional_float(value: Any) -> float | None:
-    return None if pd.isna(value) else float(value)
