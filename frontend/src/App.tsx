@@ -22,6 +22,8 @@ import {
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   ResponsiveContainer,
   Tooltip,
@@ -296,6 +298,7 @@ function Dashboard({
   preferences: Preferences;
 }) {
   const model = useApiResource(glucocareApi.getModelStatus, []);
+  const datasetDistribution = useApiResource(glucocareApi.getDatasetDistribution, []);
   const [retraining, setRetraining] = useState<string | null>(null);
   const [retrainMessage, setRetrainMessage] = useState("");
   const [retrainError, setRetrainError] = useState(false);
@@ -375,6 +378,34 @@ function Dashboard({
         onRetrainAll={() => void retrainAll()}
       />
       <div className="mt-6 grid gap-5 lg:grid-cols-2">
+        <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
+          <h3 className="font-bold text-blue-950">Dataset outcome distribution</h3>
+          <p className="mt-1 text-xs text-slate-400">
+            Counts from the source CSV · Outcome column · {datasetDistribution.data?.row_count.toLocaleString() ?? "—"} rows
+          </p>
+          {datasetDistribution.loading && !datasetDistribution.data ? (
+            <p className="mt-5 text-sm text-slate-500">Loading dataset summary…</p>
+          ) : datasetDistribution.error && !datasetDistribution.data ? (
+            <p role="alert" className="mt-5 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+              Dataset distribution is unavailable. {datasetDistribution.error}
+            </p>
+          ) : (
+            <div className="mt-5 h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={datasetDistribution.data?.counts ?? []} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
+                  <CartesianGrid stroke="#edf2fa" vertical={false} />
+                  <XAxis dataKey="label" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="count" name="Rows" fill="#2563eb" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          <p className="mt-2 text-xs leading-5 text-slate-400">
+            This chart summarizes dataset labels; it does not show patient-specific risk or establish clinical validity.
+          </p>
+        </div>
         <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
           <h3 className="font-bold text-blue-950">Illustrative glucose visualization</h3>
           <p className="mt-1 text-xs text-slate-400">Sample data only · not a live CGM feed</p>
