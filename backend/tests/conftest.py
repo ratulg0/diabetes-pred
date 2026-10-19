@@ -25,10 +25,10 @@ def client(tmp_path: Path) -> TestClient:
     artifact_path = tmp_path / "test-model.joblib"
     training_features = pd.DataFrame(
         [
-            [0, 85, 66, 29, 0, 26.6, 0.351, 31],
-            [6, 148, 72, 35, 0, 33.6, 0.627, 50],
-            [1, 89, 66, 23, 94, 28.1, 0.167, 21],
-            [8, 183, 64, 0, 0, 23.3, 0.672, 32],
+            ["Female", 31, "Moderate", "Never", "Occasional", 85, 66, 29, 90, 26.6, 180, 0.351, "No", "No"],
+            ["Male", 50, "Low", "Former", "Regular", 148, 72, 35, 120, 33.6, 250, 0.627, "Yes", "Yes"],
+            ["Female", 21, "High", "Never", None, 89, 66, 23, 94, 28.1, 160, 0.167, "No", "No"],
+            ["Male", 32, "Low", "Current", None, 183, 64, 0, 0, 23.3, 220, 0.672, "Yes", "Yes"],
         ],
         columns=list(FEATURES),
     )
