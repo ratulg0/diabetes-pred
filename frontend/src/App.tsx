@@ -289,6 +289,31 @@ function Dashboard({
   preferences: Preferences;
 }) {
   const model = useApiResource(glucocareApi.getModelStatus, []);
+  const [retraining, setRetraining] = useState<string | null>(null);
+  const [retrainMessage, setRetrainMessage] = useState("");
+  const [retrainError, setRetrainError] = useState(false);
+
+  async function retrain(modelName: string) {
+    setRetraining(modelName);
+    setRetrainMessage(`Retraining ${modelName(modelName)}. This may take a few minutes…`);
+    setRetrainError(false);
+    try {
+      const response = await glucocareApi.retrainModel(modelName);
+      await model.refresh();
+      setRetrainMessage(
+        response.available
+          ? `${modelName === response.metadata?.name ? "Model retrained and activated" : "Model retrained"}: ${modelName(response.metadata?.name ?? modelName)}.`
+          : "Retraining finished, but the API did not report a ready model.",
+      );
+      setRetrainError(!response.available);
+    } catch (caught) {
+      setRetrainMessage(caught instanceof ApiError ? caught.message : "Model retraining failed. Check the backend logs.");
+      setRetrainError(true);
+    } finally {
+      setRetraining(null);
+    }
+  }
+
   if (resource.loading && !resource.data)
     return (
       <Notice
@@ -321,18 +346,12 @@ function Dashboard({
         Saved assessment activity from the backend.
       </p>
       {resource.error && (
-        <div
-          role="alert"
-          className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900"
-        >
+        <div role="alert" className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
           Previously loaded data is shown. {resource.error}
         </div>
       )}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card
-          label="Saved assessments"
-          value={String(summary.total_assessments)}
-        />
+        <Card label="Saved assessments" value={String(summary.total_assessments)} />
         <Card label="Model class 1 outputs" value={percentage} />
         <Card label="Expected features" value="8" />
         <ModelCard
@@ -340,15 +359,18 @@ function Dashboard({
           metadata={model.data?.metadata ?? null}
         />
       </div>
-      <BenchmarkTable metadata={model.data?.metadata ?? null} available={model.data?.available ?? false} />
+      <BenchmarkTable
+        metadata={model.data?.metadata ?? null}
+        available={model.data?.available ?? false}
+        retraining={retraining}
+        retrainMessage={retrainMessage}
+        retrainError={retrainError}
+        onRetrain={(name) => void retrain(name)}
+      />
       <div className="mt-6 grid gap-5 lg:grid-cols-2">
         <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
-          <h3 className="font-bold text-blue-950">
-            Illustrative glucose visualization
-          </h3>
-          <p className="mt-1 text-xs text-slate-400">
-            Sample data only · not a live CGM feed
-          </p>
+          <h3 className="font-bold text-blue-950">Illustrative glucose visualization</h3>
+          <p className="mt-1 text-xs text-slate-400">Sample data only · not a live CGM feed</p>
           <div className="mt-5 h-56">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={CHART}>
@@ -362,18 +384,11 @@ function Dashboard({
           </div>
         </div>
         <div className="rounded-2xl border border-blue-100 bg-white p-6 shadow-soft">
-          <h3 className="font-bold text-blue-950">
-            Server-backed model output
-          </h3>
+          <h3 className="font-bold text-blue-950">Server-backed model output</h3>
           <p className="mt-3 text-sm leading-6 text-slate-500">
-            New assessments are validated, inferred by the saved server
-            pipeline, and persisted once. Outputs are calibrated model
-            estimates, not diagnoses.
+            New assessments are validated, inferred by the active saved pipeline, and persisted once. Outputs are calibrated model estimates, not diagnoses.
           </p>
-          <NavLink
-            to="/assessment"
-            className="mt-5 inline-block rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white"
-          >
+          <NavLink to="/assessment" className="mt-5 inline-block rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white">
             New assessment
           </NavLink>
         </div>
@@ -381,14 +396,9 @@ function Dashboard({
       <div className="mt-6">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-bold text-blue-950">Recent assessments</h3>
-          <NavLink to="/history" className="text-sm font-bold text-blue-600">
-            View history
-          </NavLink>
+          <NavLink to="/history" className="text-sm font-bold text-blue-600">View history</NavLink>
         </div>
-        <Records
-          records={summary.recent_assessments}
-          preferences={preferences}
-        />
+        <Records records={summary.recent_assessments} preferences={preferences} />
       </div>
     </div>
   );
@@ -437,53 +447,99 @@ function ModelCard({
 function BenchmarkTable({
   metadata,
   available,
+  retraining,
+  retrainMessage,
+  retrainError,
+  onRetrain,
 }: {
   metadata: ModelMetadata | null;
   available: boolean;
+  retraining: string | null;
+  retrainMessage: string;
+  retrainError: boolean;
+  onRetrain: (name: string) => void;
 }) {
-  const candidates = metadata?.candidate_results ?? [];
-  if (!available) {
-    return (
-      <div className="mt-6 rounded-2xl border border-amber-100 bg-amber-50 p-5 text-sm text-amber-900">
-        Model benchmark unavailable. Train the four candidates and restart the API to view comparison metrics.
-      </div>
-    );
-  }
+  const supportedModels = [
+    "logistic_regression",
+    "random_forest",
+    "xgboost",
+    "hist_gradient_boosting",
+  ];
+  const candidateByName = new Map(
+    (metadata?.candidate_results ?? []).map((candidate) => [candidate.name, candidate]),
+  );
   return (
     <section className="mt-6 rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="font-bold text-blue-950">Model benchmark</h3>
-          <p className="mt-1 text-sm text-slate-500">All four algorithms are compared using stratified cross-validation. Only the selected winner is used for predictions.</p>
+          <h3 className="font-bold text-blue-950">Model benchmark & retraining</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            All four models are trained on API startup. Use a model's button to retrain that algorithm and make it the active model for new assessments.
+          </p>
         </div>
-        <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">Selection: CV ROC-AUC</span>
+        <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">5-fold CV</span>
       </div>
-      {candidates.length ? (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[650px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs text-slate-500">
-              <tr><th className="p-3">Algorithm</th><th className="p-3">CV accuracy</th><th className="p-3">CV ROC-AUC</th><th className="p-3">CV Brier score ↓</th><th className="p-3">Role</th></tr>
-            </thead>
-            <tbody>
-              {candidates.map((candidate) => {
-                const selected = candidate.name === metadata?.name;
-                return (
-                  <tr key={candidate.name} className="border-t border-slate-100">
-                    <td className="p-3 font-semibold text-blue-950">{modelName(candidate.name)}</td>
-                    <td className="p-3">{percent(candidate.cv_accuracy_mean)}</td>
-                    <td className="p-3">{percent(candidate.cv_roc_auc_mean)}</td>
-                    <td className="p-3">{typeof candidate.cv_brier_mean === "number" ? candidate.cv_brier_mean.toFixed(3) : "—"}</td>
-                    <td className="p-3">{selected ? <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Selected</span> : <span className="text-xs text-slate-500">Benchmarked</span>}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="mt-4 text-sm text-slate-500">This artifact predates benchmark details. Retrain once to populate all four comparison rows.</p>
+      {!available && (
+        <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+          No usable model is currently loaded. Retrain one of the models below to activate it.
+        </p>
       )}
-      <p className="mt-3 text-xs leading-5 text-slate-500">Cross-validation results are training-set model-selection metrics. Held-out test accuracy for the selected model is shown above; neither metric establishes clinical accuracy or diagnosis.</p>
+      {retrainMessage && (
+        <p role={retrainError ? "alert" : "status"} className={cn("mt-4 rounded-xl p-3 text-sm", retrainError ? "bg-rose-50 text-rose-800" : "bg-emerald-50 text-emerald-800")}>
+          {retrainMessage}
+        </p>
+      )}
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full min-w-[800px] text-left text-sm">
+          <thead className="bg-slate-50 text-xs text-slate-500">
+            <tr>
+              <th className="p-3">Algorithm</th>
+              <th className="p-3">CV accuracy</th>
+              <th className="p-3">CV ROC-AUC</th>
+              <th className="p-3">CV Brier score ↓</th>
+              <th className="p-3">Status</th>
+              <th className="p-3">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {supportedModels.map((name) => {
+              const candidate = candidateByName.get(name);
+              const selected = name === metadata?.name;
+              const isRetraining = retraining === name;
+              return (
+                <tr key={name} className="border-t border-slate-100">
+                  <td className="p-3 font-semibold text-blue-950">{modelName(name)}</td>
+                  <td className="p-3">{candidate ? percent(candidate.cv_accuracy_mean) : "—"}</td>
+                  <td className="p-3">{candidate ? percent(candidate.cv_roc_auc_mean) : "—"}</td>
+                  <td className="p-3">{candidate ? candidate.cv_brier_mean.toFixed(3) : "—"}</td>
+                  <td className="p-3">
+                    {selected ? (
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Active</span>
+                    ) : candidate ? (
+                      <span className="text-xs text-slate-500">Benchmarked</span>
+                    ) : (
+                      <span className="text-xs text-slate-400">Not trained yet</span>
+                    )}
+                  </td>
+                  <td className="p-3">
+                    <button
+                      type="button"
+                      disabled={retraining !== null}
+                      onClick={() => onRetrain(name)}
+                      className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isRetraining ? "Retraining…" : "Retrain"}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-3 text-xs leading-5 text-slate-500">
+        CV metrics are training-set model-selection measures. Held-out accuracy is reported for the active model and is not the probability that an individual prediction is correct. Research prototype only; not for diagnosis.
+      </p>
     </section>
   );
 }
