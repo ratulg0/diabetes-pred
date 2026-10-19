@@ -33,7 +33,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # Startup: configure DB, create tables for local dev, load registry, and
-        # optionally train all four models into the ensemble.
+        # optionally train and select the active model from the replacement dataset.
         app.state.settings = runtime_settings
         app.state.database = Database(runtime_settings.resolved_database_url)
         if runtime_settings.uses_local_development_database:
