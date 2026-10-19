@@ -450,14 +450,14 @@ function BenchmarkTable({
   retraining,
   retrainMessage,
   retrainError,
-  onRetrain,
+  onRetrainAll,
 }: {
   metadata: ModelMetadata | null;
   available: boolean;
   retraining: string | null;
   retrainMessage: string;
   retrainError: boolean;
-  onRetrain: (name: string) => void;
+  onRetrainAll: () => void;
 }) {
   const supportedModels = [
     "logistic_regression",
@@ -468,18 +468,25 @@ function BenchmarkTable({
   const candidates = metadata?.candidate_results ?? [];
   return (
     <section className="mt-6 rounded-2xl border border-blue-100 bg-white p-5 shadow-soft">
-      <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-bold text-blue-950">Model benchmark & retraining</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            All four models are trained on API startup. Use a model's button to retrain that algorithm and make it the active model for new assessments.
+          <h3 className="font-bold text-blue-950">Ensemble model</h3>
+          <p className="mt-1 max-w-2xl text-sm text-slate-500">
+            All four algorithms contribute to one final decision by averaging their estimated positive-class probabilities. There is no single-model selection.
           </p>
         </div>
-        <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">5-fold CV</span>
+        <button
+          type="button"
+          disabled={retraining !== null}
+          onClick={onRetrainAll}
+          className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {retraining ? "Training all models…" : "Train all models"}
+        </button>
       </div>
       {!available && (
         <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
-          No usable model is currently loaded. Retrain one of the models below to activate it.
+          The ensemble is not ready yet. Train all models to create it.
         </p>
       )}
       {retrainMessage && (
@@ -487,56 +494,26 @@ function BenchmarkTable({
           {retrainMessage}
         </p>
       )}
-      <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[800px] text-left text-sm">
-          <thead className="bg-slate-50 text-xs text-slate-500">
-            <tr>
-              <th className="p-3">Algorithm</th>
-              <th className="p-3">CV accuracy</th>
-              <th className="p-3">CV ROC-AUC</th>
-              <th className="p-3">CV Brier score ↓</th>
-              <th className="p-3">Status</th>
-              <th className="p-3">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {supportedModels.map((name) => {
-              const candidate = candidates.find((item) => item.name === name);
-              const selected = name === metadata?.name;
-              const isRetraining = retraining === name;
-              return (
-                <tr key={name} className="border-t border-slate-100">
-                  <td className="p-3 font-semibold text-blue-950">{modelName(name)}</td>
-                  <td className="p-3">{candidate ? percent(candidate.cv_accuracy_mean) : "—"}</td>
-                  <td className="p-3">{candidate ? percent(candidate.cv_roc_auc_mean) : "—"}</td>
-                  <td className="p-3">{candidate ? candidate.cv_brier_mean.toFixed(3) : "—"}</td>
-                  <td className="p-3">
-                    {selected ? (
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Active</span>
-                    ) : candidate ? (
-                      <span className="text-xs text-slate-500">Benchmarked</span>
-                    ) : (
-                      <span className="text-xs text-slate-400">Not trained yet</span>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    <button
-                      type="button"
-                      disabled={retraining !== null}
-                      onClick={() => onRetrain(name)}
-                      className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isRetraining ? "Retraining…" : "Retrain"}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {supportedModels.map((name) => {
+          const trained = candidates.some((candidate) => candidate.name === name);
+          return (
+            <div key={name} className="rounded-xl border border-blue-100 bg-slate-50 p-4">
+              <p className="font-semibold text-blue-950">{modelName(name)}</p>
+              <p className="mt-2 text-xs text-slate-500">
+                {available && trained ? "Ensemble member" : "Awaiting training"}
+              </p>
+            </div>
+          );
+        })}
       </div>
+      {metadata?.ensemble_rule && (
+        <p className="mt-4 text-xs leading-5 text-slate-500">
+          Decision rule: average all four model probabilities; values at or above 50% produce a likely YES result, otherwise likely NO. The probability is a model estimate, not a clinical risk assessment.
+        </p>
+      )}
       <p className="mt-3 text-xs leading-5 text-slate-500">
-        CV metrics are training-set model-selection measures. Held-out accuracy is reported for the active model and is not the probability that an individual prediction is correct. Research prototype only; not for diagnosis.
+        Research prototype only. Model outputs must not be used to diagnose or rule out diabetes.
       </p>
     </section>
   );
