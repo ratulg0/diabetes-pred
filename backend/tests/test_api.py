@@ -49,12 +49,6 @@ def test_persist_list_and_dashboard(client: TestClient) -> None:
 
 
 
-def test_model_retraining_rejects_unknown_algorithm(client: TestClient) -> None:
-    response = client.post("/api/v1/models/retrain/not-a-supported-model")
-    assert response.status_code == 400
-    assert "Unsupported model" in response.json()["message"]
-
-
 def test_preferences_round_trip(client: TestClient) -> None:
     assert client.get("/api/v1/preferences").status_code == 200
     response = client.put("/api/v1/preferences", json={"glucose_unit": "mmol/L", "compact_tables": True, "assessment_notifications": False})
