@@ -1,14 +1,21 @@
 // Shared TypeScript types mirroring the backend API schemas: assessment input,
 // model metadata, records, dashboard summary, preferences, and error body.
+// Request schema for the replacement 20,000-row clinical-assessment dataset.
 export type AssessmentInput = {
-  pregnancies: number;
-  glucose: number;
-  blood_pressure: number;
-  skin_thickness: number;
-  insulin: number;
-  bmi: number;
-  diabetes_pedigree_function: number;
+  gender: string;
   age: number;
+  physical_activity: string;
+  smoking_status: string;
+  alcohol_intake: string;
+  glucose: number | null;
+  blood_pressure: number | null;
+  skin_thickness: number | null;
+  insulin: number | null;
+  bmi: number | null;
+  cholesterol: number | null;
+  diabetes_pedigree_function: number | null;
+  family_history: string;
+  hypertension: string;
 };
 
 export type ModelIdentity = { name: string; version: string };
@@ -43,7 +50,7 @@ export type AssessmentRecord = {
   disclaimer: string;
   created_at: string;
   source: string;
-  input: AssessmentInput;
+  input: Partial<AssessmentInput> & { age?: number; glucose?: number | null; pregnancies?: number; legacy_schema?: string; [key: string]: unknown };
 };
 
 export type LifestyleAssessmentInput = {
@@ -124,29 +131,3 @@ export type ApiErrorBody = {
   field_errors?: Record<string, string>;
 };
 
-
-// Inputs and output for the separately trained uploaded-dataset model.
-export type DatasetAssessmentInput = {
-  gender: "Male" | "Female";
-  age: number;
-  physical_activity: "Low" | "Moderate" | "High";
-  smoking_status: "Never" | "Former" | "Current";
-  alcohol_intake: "Occasional" | "Regular";
-  glucose: number;
-  blood_pressure: number;
-  skin_thickness: number;
-  insulin: number;
-  bmi: number;
-  cholesterol: number;
-  diabetes_pedigree_function: number;
-  family_history: "Yes" | "No";
-  hypertension: "Yes" | "No";
-};
-
-export type DatasetPredictionResponse = {
-  prediction_label: "Diabetic" | "Non-diabetic";
-  probability: number;
-  model_name: string;
-  metrics: Record<string, number | string>;
-  disclaimer: string;
-};
