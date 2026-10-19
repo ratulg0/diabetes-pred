@@ -81,7 +81,7 @@ This writes ignored artifacts under `../models/`. It evaluates all four candidat
 | GET | `/api/v1/models` | Artifact availability and metadata |
 | GET/PUT | `/api/v1/preferences` | Local-development display preferences only |
 
-The API does not return a probability because the baseline pipelines do not add a calibrated-probability step. Every prediction includes the research-prototype disclaimer.
+Predictions return a human-readable likely YES/NO model result, a calibrated estimated probability when available, and the selected model's held-out test accuracy. The model-status endpoint exposes cross-validation accuracy, ROC-AUC and Brier score for all four benchmark candidates. Only the candidate selected by training-set cross-validation is saved for inference; the other three are benchmarked and reported, not deployed as separate inference models. These research metrics are not clinical validation. Every prediction includes the research-prototype disclaimer.
 
 ## Tests
 
