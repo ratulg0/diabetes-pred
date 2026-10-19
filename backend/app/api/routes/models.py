@@ -1,4 +1,4 @@
-# Model status and retraining routes for the active replacement-dataset classifier.
+# Model status and retraining routes for the four-model soft-voting clinical ensemble.
 from __future__ import annotations
 
 import asyncio
@@ -42,7 +42,7 @@ async def retrain_all_models(
     request: Request,
     model_registry: ModelRegistry = Depends(get_model_registry),
 ) -> ModelStatusResponse:
-    """Re-evaluate the supported candidates and activate the best replacement-dataset model."""
+    """Retrain all four classifiers and activate their equal-weight soft-voting ensemble."""
     # Guard against concurrent retraining jobs.
     if not _retraining_lock.acquire(blocking=False):
         raise HTTPException(
