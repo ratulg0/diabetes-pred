@@ -32,7 +32,6 @@ import {
 import { ApiError } from "./api/client";
 import { glucocareApi } from "./api/glucocare";
 import type {
-  AssessmentInput,
   AssessmentPage,
   AssessmentRecord,
   DashboardSummary,
@@ -41,20 +40,7 @@ import type {
 } from "./api/types";
 import { useApiResource } from "./hooks/use-api-resource";
 import LifestyleAssessment from "./pages/LifestyleAssessment";
-import DatasetAssessment from "./pages/DatasetAssessment";
 
-// Form field schema: all eight Pima dataset features captured as strings during input, plus the empty default state.
-type FormValues = Record<keyof AssessmentInput, string>;
-const EMPTY_FORM: FormValues = {
-  pregnancies: "",
-  glucose: "",
-  blood_pressure: "",
-  skin_thickness: "",
-  insulin: "",
-  bmi: "",
-  diabetes_pedigree_function: "",
-  age: "",
-};
 // Illustrative sample data for the dashboard area chart (not live CGM data).
 const CHART = [
   { day: "Mon", value: 112 },
@@ -92,10 +78,12 @@ const MODEL_NAMES: Record<string, string> = {
   ensemble: "Four-model soft-voting ensemble",
 };
 const modelName = (name: string) => MODEL_NAMES[name] ?? name;
-const displayGlucose = (value: number, unit: Preferences["glucose_unit"]) =>
-  unit === "mmol/L"
-    ? `${(value / 18.0182).toFixed(1)} mmol/L`
-    : `${value.toFixed(0)} mg/dL`;
+const displayGlucose = (value: number | null | undefined, unit: Preferences["glucose_unit"]) =>
+  typeof value !== "number" || !Number.isFinite(value)
+    ? "Not recorded"
+    : unit === "mmol/L"
+      ? `${(value / 18.0182).toFixed(1)} mmol/L`
+      : `${value.toFixed(0)} mg/dL`;
 
 // Notice: reusable alert/empty-state card with optional retry action, used for loading, errors, and empty results.
 function Notice({
@@ -137,7 +125,6 @@ function Shell({ children }: { children: React.ReactNode }) {
         "/": "Overview",
         "/assessment": "Clinical lab assessment",
         "/lifestyle-assessment": "Lifestyle & health assessment",
-        "/dataset-assessment": "Uploaded dataset assessment",
         "/history": "Assessment history",
         "/settings": "Preferences",
       } as Record<string, string>
@@ -146,7 +133,6 @@ function Shell({ children }: { children: React.ReactNode }) {
     ["/", "Overview", LayoutDashboard],
     ["/assessment", "Clinical assessment", Activity],
     ["/lifestyle-assessment", "Lifestyle assessment", HeartPulse],
-    ["/dataset-assessment", "Uploaded dataset model", Activity],
     ["/history", "Assessment history", ClipboardList],
     ["/settings", "Preferences", Settings],
   ] as const;
@@ -968,7 +954,6 @@ export default function App() {
           path="/lifestyle-assessment"
           element={<LifestyleAssessment />}
         />
-        <Route path="/dataset-assessment" element={<DatasetAssessment />} />
         <Route
           path="/history"
           element={<History preferences={preferences} />}
