@@ -25,6 +25,8 @@ export type ModelMetadata = {
   name?: string;
   version?: string;
   algorithm?: string;
+  members?: string[];
+  ensemble_rule?: string;
   candidate_results?: ModelCandidateResult[];
   test_metrics?: { accuracy?: number; roc_auc?: number; pr_auc?: number };
 };
