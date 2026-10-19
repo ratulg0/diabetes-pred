@@ -33,6 +33,8 @@ CV_FOLDS = 5
 @dataclass(frozen=True)
 class CandidateResult:
     name: str
+    cv_accuracy_mean: float
+    cv_accuracy_std: float
     cv_roc_auc_mean: float
     cv_roc_auc_std: float
     cv_brier_mean: float
@@ -78,13 +80,15 @@ def train_and_select(dataset_path: Path, artifact_path: Path, version: str | Non
             train_features,
             train_target,
             cv=cv,
-            scoring={"roc_auc": "roc_auc", "brier": "neg_brier_score"},
+            scoring={"accuracy": "accuracy", "roc_auc": "roc_auc", "brier": "neg_brier_score"},
             n_jobs=1,
             return_train_score=False,
         )
         results.append(
             CandidateResult(
                 name=name,
+                cv_accuracy_mean=round(float(np.mean(scores["test_accuracy"])), 6),
+                cv_accuracy_std=round(float(np.std(scores["test_accuracy"], ddof=1)), 6),
                 cv_roc_auc_mean=round(float(np.mean(scores["test_roc_auc"])), 6),
                 cv_roc_auc_std=round(float(np.std(scores["test_roc_auc"], ddof=1)), 6),
                 cv_brier_mean=round(float(-np.mean(scores["test_brier"])), 6),
