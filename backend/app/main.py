@@ -34,25 +34,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if runtime_settings.uses_local_development_database:
             Base.metadata.create_all(app.state.database.engine)
         app.state.model_registry = ModelRegistry(runtime_settings.resolved_model_artifact_path)
-        try:
-            metadata = await asyncio.to_thread(
-                train_and_select,
-                runtime_settings.dataset_path,
-                runtime_settings.resolved_model_artifact_path,
-                runtime_settings.model_version,
-            )
-            app.state.model_registry.reload()
-            logger.info(
-                "startup_model_training_complete model=%s version=%s",
-                metadata["name"],
-                metadata["version"],
-            )
-        except Exception:
-            # Keep the previous artifact usable if startup training fails.
-            logger.exception("startup_model_training_failed")
-            existing = app.state.model_registry.status()
-            if not existing["available"]:
-                logger.error("No usable model artifact is available after startup training failed.")
+        if runtime_settings.app_env.lower() != "test":
+            try:
+                metadata = await asyncio.to_thread(
+                    train_and_select,
+                    runtime_settings.dataset_path,
+                    runtime_settings.resolved_model_artifact_path,
+                    runtime_settings.model_version,
+                )
+                app.state.model_registry.reload()
+                logger.info(
+                    "startup_model_training_complete model=%s version=%s",
+                    metadata["name"],
+                    metadata["version"],
+                )
+            except Exception:
+                # Keep the previous artifact usable if startup training fails.
+                logger.exception("startup_model_training_failed")
+                existing = app.state.model_registry.status()
+                if not existing["available"]:
+                    logger.error("No usable model artifact is available after startup training failed.")
         yield
 
     app = FastAPI(
